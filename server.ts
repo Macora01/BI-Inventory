@@ -193,6 +193,21 @@ async function startServer() {
         }
     });
 
+    // Endpoint para obtener la configuración del logo (usado por el frontend)
+    app.get('/api/settings/logo', async (req, res) => {
+        try {
+            const logoPath = path.join(uploadsDir, 'logo.png');
+            await fs.access(logoPath);
+            res.json({ logo: '/api/logo' });
+        } catch {
+            res.json({ logo: null });
+        }
+    });
+
+    // Servir archivos estáticos de uploads
+    app.use('/uploads', express.static(uploadsDir));
+    app.use('/uploads/products', express.static(productsDir));
+
     // Upload Logo/Images
     app.post('/api/upload', upload.single('file'), (req, res) => {
         res.json({ success: true, file: req.file });
