@@ -8,6 +8,51 @@ import { Edit, Trash2, Database, CheckCircle2, XCircle, RefreshCw, AlertTriangle
 import { useToast } from '../hooks/useToast';
 import { APP_VERSION } from '../version';
 
+const CHANGELOG = [
+    {
+        version: "1.2.001",
+        date: "2026-04-19",
+        title: "Mejoras de UI y Carga Masiva",
+        changes: [
+            "Ajuste de prioridad en rutas de servidor para evitar error 'Invalid entity' en importaciones.",
+            "Visualización mejorada de ubicaciones con scroll y orden cronológico inverso.",
+            "Inicialización automática de 'Bodega Central' como ubicación por defecto.",
+            "Optimización de lógica de base de datos para modo JSON y PostgreSQL."
+        ]
+    },
+    {
+        version: "1.2.000",
+        date: "2026-04-19",
+        title: "Lanzamiento Estable (PostgreSQL & Logo Fix)",
+        changes: [
+            "Implementación definitiva de PostgreSQL con sistema de persistencia en volumen.",
+            "Corrección crítica de autenticación en DB mediante comandos administrativos de Docker.",
+            "Mejora del sistema de Logo con cache-busting automático.",
+            "Limpieza de logs de depuración para entorno de producción.",
+            "Soporte estático para archivos subidos (/uploads)."
+        ]
+    },
+    {
+        version: "1.1.000",
+        date: "2026-04-18",
+        title: "Mejoras de Infraestructura",
+        changes: [
+            "Migración de Express v4 a Express v5 (manejo de rutas comodín).",
+            "Configuración de Docker multi-etapa para optimización de despliegue.",
+            "Sistema de fallback JSON para resiliencia de datos."
+        ]
+    },
+    {
+        version: "1.0.000",
+        date: "2026-04-15",
+        title: "Lanzamiento Inicial",
+        changes: [
+            "Estructura base de la aplicación (Dashboard, Inventario, Movimientos).",
+            "Soporte inicial para temas personalizados y gestión de usuarios."
+        ]
+    }
+];
+
 const SettingsPage: React.FC = () => {
     const { 
         locations, addLocation, updateLocation, deleteLocation,
@@ -285,27 +330,43 @@ const SettingsPage: React.FC = () => {
             )}
 
             <Card title="Gestión de Ubicaciones">
-                <Button onClick={() => openLocationModal()} className="mb-4">Añadir Ubicación</Button>
-                <div className="overflow-x-auto">
+                <div className="flex items-center justify-between mb-4">
+                    <p className="text-sm text-text-light">Gestiona las bodegas, tiendas y puntos de venta.</p>
+                    <Button onClick={() => openLocationModal()} size="sm">Añadir Ubicación</Button>
+                </div>
+                
+                <div className="overflow-y-auto max-h-80 border border-accent rounded-xl shadow-inner bg-background/30">
                     <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-primary uppercase bg-accent">
+                        <thead className="text-xs text-primary uppercase bg-accent/80 backdrop-blur-sm sticky top-0 z-10">
                             <tr>
                                 <th className="px-6 py-3">Nombre</th>
                                 <th className="px-6 py-3">Tipo</th>
                                 <th className="px-6 py-3 text-right">Acciones</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {locations.map(loc => (
-                                <tr key={loc.id} className="bg-background-light border-b border-background">
-                                    <td className="px-6 py-4">{loc.name}</td>
-                                    <td className="px-6 py-4">{LOCATION_TYPE_MAP[loc.type]}</td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button onClick={() => openLocationModal(loc)} className="text-secondary p-1"><Edit size={16}/></button>
-                                        <button onClick={() => deleteLocation(loc.id)} className="text-danger p-1 ml-2"><Trash2 size={16}/></button>
-                                    </td>
+                        <tbody className="divide-y divide-accent/30">
+                            {locations.length > 0 ? (
+                                [...locations].reverse().map(loc => (
+                                    <tr key={loc.id} className="bg-white/50 hover:bg-accent/5 transition-colors group">
+                                        <td className="px-6 py-4 font-medium text-text-main">{loc.name}</td>
+                                        <td className="px-6 py-4">
+                                            <span className="px-2 py-1 bg-accent/20 text-primary text-[10px] uppercase font-bold rounded-full">
+                                                {LOCATION_TYPE_MAP[loc.type]}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => openLocationModal(loc)} className="text-secondary hover:bg-secondary/10 p-1.5 rounded-lg transition-colors" title="Editar"><Edit size={16}/></button>
+                                                <button onClick={() => deleteLocation(loc.id)} className="text-danger hover:bg-danger/10 p-1.5 rounded-lg transition-colors" title="Eliminar"><Trash2 size={16}/></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={3} className="px-6 py-10 text-center text-text-light italic">No hay ubicaciones registradas.</td>
                                 </tr>
-                            ))}
+                            )}
                         </tbody>
                     </table>
                 </div>
@@ -337,6 +398,31 @@ const SettingsPage: React.FC = () => {
                             ))}
                         </tbody>
                     </table>
+                </div>
+            </Card>
+
+            <Card title="Historial de Versiones (Changelog)">
+                <div className="p-4 space-y-6">
+                    {CHANGELOG.map((release, idx) => (
+                        <div key={release.version} className={`relative pl-8 ${idx !== CHANGELOG.length - 1 ? 'border-l-2 border-accent pb-6 ml-2' : 'ml-2'}`}>
+                            <div className="absolute -left-[11px] top-0 w-5 h-5 rounded-full bg-accent border-4 border-white shadow-sm"></div>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+                                <h4 className="font-bold text-primary flex items-center">
+                                    v{release.version} - {release.title}
+                                    {idx === 0 && <span className="ml-3 text-[10px] bg-success text-white px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Actual</span>}
+                                </h4>
+                                <span className="text-xs font-mono text-text-light">{release.date}</span>
+                            </div>
+                            <ul className="space-y-1">
+                                {release.changes.map((change, cIdx) => (
+                                    <li key={cIdx} className="text-sm text-text-main flex items-start">
+                                        <span className="text-accent mr-2">•</span>
+                                        {change}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ))}
                 </div>
             </Card>
 

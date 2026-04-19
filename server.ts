@@ -83,6 +83,14 @@ async function initDb() {
                 );
             `);
             console.log('PostgreSQL Tables initialized successfully');
+
+            // Insert default location if empty
+            const locationsCount = await client.query('SELECT count(*) FROM locations');
+            if (parseInt(locationsCount.rows[0].count) === 0) {
+                await client.query("INSERT INTO locations (id, name) VALUES ('main_warehouse', 'Bodega Central')");
+                console.log('Default location "Bodega Central" created.');
+            }
+
             isPgActive = true;
             return true;
         } finally {
@@ -182,6 +190,77 @@ async function startServer() {
         });
     });
 
+    // Bulk Import for Initial Inventory (Moved UP to avoid shadowing by /api/:entity)
+    app.post('/api/bulk-import', async (req, res) => {
+        const { products, stock, movements } = req.body;
+        const currentPool = getPool();
+        
+        if (isPgActive && currentPool) {
+            try {
+                await currentPool.query('BEGIN');
+                if (products) {
+                    for (const p of products) {
+                        const keys = Object.keys(p);
+                        const placeholders = keys.map((_, i) => `$${i + 1}`).join(',');
+                        const updates = keys.map((k, i) => `${k} = $${i + 1}`).join(',');
+                        await currentPool.query(`INSERT INTO products (${keys.join(',')}) VALUES (${placeholders}) ON CONFLICT (id_venta) DO UPDATE SET ${updates}`, Object.values(p));
+                    }
+                }
+                if (stock) {
+                    for (const s of stock) {
+                        await currentPool.query(`INSERT INTO stock (product_id, location_id, quantity) VALUES ($1, $2, $3) ON CONFLICT (product_id, location_id) DO UPDATE SET quantity = $3`, [s.productId, s.locationId, s.quantity]);
+                    }
+                }
+                if (movements) {
+                    for (const m of movements) {
+                        const pk = m.id || `mov-${Date.now()}-${Math.random()}`;
+                        await currentPool.query(`INSERT INTO movements (id, product_id, from_location_id, to_location_id, quantity, type, reason, date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO NOTHING`, [pk, m.productId, m.fromLocationId, m.toLocationId, m.quantity, m.type, m.reason, m.date]);
+                    }
+                }
+                await currentPool.query('COMMIT');
+                res.json({ success: true });
+            } catch (err: any) {
+                await currentPool.query('ROLLBACK').catch(() => {});
+                res.status(500).json({ error: err.message });
+            }
+        } else {
+            if (products) await writeDataJson('products', products);
+            if (stock) await writeDataJson('stock', stock);
+            if (movements) await writeDataJson('movements', movements);
+            res.json({ success: true });
+        }
+    });
+
+    // Stock Update Special (Moved UP)
+    app.post('/api/stock/update', async (req, res) => {
+        const { productId, locationId, quantityChange } = req.body;
+        const currentPool = getPool();
+        
+        if (isPgActive && currentPool) {
+            try {
+                await currentPool.query(`
+                    INSERT INTO stock (product_id, location_id, quantity)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (product_id, location_id)
+                    DO UPDATE SET quantity = stock.quantity + $3
+                `, [productId, locationId, quantityChange]);
+                res.json({ success: true });
+            } catch (err: any) {
+                res.status(500).json({ error: err.message });
+            }
+        } else {
+            const stockData = await readDataJson('stock', []);
+            const index = stockData.findIndex((s: any) => s.productId === productId && s.locationId === locationId);
+            if (index > -1) {
+                stockData[index].quantity += Number(quantityChange);
+            } else if (quantityChange > 0) {
+                stockData.push({ productId, locationId, quantity: Number(quantityChange) });
+            }
+            await writeDataJson('stock', stockData);
+            res.json({ success: true });
+        }
+    });
+
     // Logo
     app.get('/api/logo', async (req, res) => {
         try {
@@ -232,8 +311,6 @@ async function startServer() {
     app.get('/api/:entity', async (req, res) => {
         const { entity } = req.params;
         if (!entities.includes(entity)) return res.status(404).json({ error: 'Invalid entity' });
-
-        const isPgActive = dbInitError === null && process.env.DATABASE_URL;
 
         if (isPgActive) {
             try {
@@ -305,79 +382,6 @@ async function startServer() {
                     updatedData = [...currentData, newItem];
                 }
                 await writeDataJson(entity, updatedData);
-            }
-            res.json({ success: true });
-        }
-    });
-
-    // Stock Update Special
-    app.post('/api/stock/update', async (req, res) => {
-        const { productId, locationId, quantityChange } = req.body;
-        
-        if (isPgActive) {
-            try {
-                await pool.query(`
-                    INSERT INTO stock (product_id, location_id, quantity)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT (product_id, location_id)
-                    DO UPDATE SET quantity = stock.quantity + $3
-                `, [productId, locationId, quantityChange]);
-                res.json({ success: true });
-            } catch (err: any) {
-                res.status(500).json({ error: err.message });
-            }
-        } else {
-            const stockData = await readDataJson('stock', []);
-            const index = stockData.findIndex((s: any) => s.productId === productId && s.locationId === locationId);
-            if (index > -1) {
-                stockData[index].quantity += Number(quantityChange);
-            } else if (quantityChange > 0) {
-                stockData.push({ productId, locationId, quantity: Number(quantityChange) });
-            }
-            await writeDataJson('stock', stockData);
-            res.json({ success: true });
-        }
-    });
-
-    // Bulk Import for Initial Inventory
-    app.post('/api/bulk-import', async (req, res) => {
-        const { products, stock, movements } = req.body;
-        
-        if (isPgActive) {
-            try {
-                await pool.query('BEGIN');
-                if (products) {
-                    for (const p of products) {
-                        const keys = Object.keys(p);
-                        const placeholders = keys.map((_, i) => `$${i + 1}`).join(',');
-                        const updates = keys.map((k, i) => `${k} = $${i + 1}`).join(',');
-                        await pool.query(`INSERT INTO products (${keys.join(',')}) VALUES (${placeholders}) ON CONFLICT (id_venta) DO UPDATE SET ${updates}`, Object.values(p));
-                    }
-                }
-                if (stock) {
-                    for (const s of stock) {
-                        await pool.query(`INSERT INTO stock (product_id, location_id, quantity) VALUES ($1, $2, $3) ON CONFLICT (product_id, location_id) DO UPDATE SET quantity = $3`, [s.productId, s.locationId, s.quantity]);
-                    }
-                }
-                if (movements) {
-                    for (const m of movements) {
-                        // Snake case mapping for movements if needed or use same keys
-                        const pk = m.id || `mov-${Date.now()}-${Math.random()}`;
-                        await pool.query(`INSERT INTO movements (id, product_id, from_location_id, to_location_id, quantity, type, reason, date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO NOTHING`, [pk, m.productId, m.fromLocationId, m.toLocationId, m.quantity, m.type, m.reason, m.date]);
-                    }
-                }
-                await pool.query('COMMIT');
-                res.json({ success: true });
-            } catch (err: any) {
-                await pool.query('ROLLBACK').catch(() => {});
-                res.status(500).json({ error: err.message });
-            }
-        } else {
-            if (products) await writeDataJson('products', products);
-            if (stock) await writeDataJson('stock', stock);
-            if (movements) {
-                const currentMovements = await readDataJson('movements', []);
-                await writeDataJson('movements', [...movements, ...currentMovements].slice(0, 1000));
             }
             res.json({ success: true });
         }
