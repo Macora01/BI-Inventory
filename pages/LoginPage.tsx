@@ -28,8 +28,13 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-background-light flex flex-col justify-center items-center p-6 font-sans">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <div className="inline-flex p-4 rounded-full bg-primary mb-6 shadow-lg rotate-3 hover:rotate-0 transition-transform">
-            <Archive size={48} className="text-white" />
+          <div className="inline-flex mb-6 drop-shadow-xl transition-transform hover:scale-105 duration-300">
+            <img 
+              src="/uploads/logo.png" 
+              alt="Boa Ideia Logo" 
+              className="h-32 w-auto object-contain"
+              referrerPolicy="no-referrer"
+            />
           </div>
           <h1 className="text-4xl font-extrabold italic text-primary uppercase tracking-tighter">
             Boa Ideia

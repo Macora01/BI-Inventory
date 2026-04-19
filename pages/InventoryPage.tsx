@@ -39,6 +39,14 @@ const InventoryPage: React.FC = () => {
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+    const [transferData, setTransferData] = useState({
+        productId: '',
+        fromLocationId: '',
+        toLocationId: '',
+        quantity: 0,
+        reason: ''
+    });
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
     const [qrScannerTarget, setQRScannerTarget] = useState<'search' | 'product_id' | 'factory_id'>('search');
@@ -204,6 +212,64 @@ const InventoryPage: React.FC = () => {
         });
         
         setIsAdjustmentModalOpen(false);
+    };
+
+    const handleOpenTransfer = (productId: string) => {
+        setTransferData({
+            productId,
+            fromLocationId: locations[0]?.id || '',
+            toLocationId: locations[1]?.id || '',
+            quantity: 1,
+            reason: ''
+        });
+        setIsTransferModalOpen(true);
+    };
+
+    const handleSaveTransfer = async (e: React.FormEvent) => {
+        e.preventDefault();
+        
+        if (transferData.fromLocationId === transferData.toLocationId) {
+            addToast('El origen y el destino no pueden ser iguales.', 'error');
+            return;
+        }
+
+        const currentFromStock = getStockForProductAndLocation(transferData.productId, transferData.fromLocationId);
+        if (currentFromStock < transferData.quantity) {
+            addToast(`Stock insuficiente en la ubicación de origen. Disponible: ${currentFromStock}`, 'error');
+            return;
+        }
+
+        try {
+            // Descontar de origen
+            await updateStock(transferData.productId, transferData.fromLocationId, -transferData.quantity);
+            // Sumar a destino
+            await updateStock(transferData.productId, transferData.toLocationId, transferData.quantity);
+            
+            // Registrar Movimientos
+            await addMovement({
+                productId: transferData.productId,
+                quantity: transferData.quantity,
+                type: MovementType.TRANSFER_OUT,
+                fromLocationId: transferData.fromLocationId,
+                toLocationId: transferData.toLocationId,
+                relatedFile: `Transferencia Manual: ${transferData.reason}`
+            });
+
+            await addMovement({
+                productId: transferData.productId,
+                quantity: transferData.quantity,
+                type: MovementType.TRANSFER_IN,
+                fromLocationId: transferData.fromLocationId,
+                toLocationId: transferData.toLocationId,
+                relatedFile: `Transferencia Manual: ${transferData.reason}`
+            });
+
+            addToast('Transferencia realizada con éxito.', 'success');
+            setIsTransferModalOpen(false);
+        } catch (err) {
+            console.error('Error en transferencia manual:', err);
+            addToast('Error al procesar la transferencia.', 'error');
+        }
     };
 
     /**
@@ -800,6 +866,13 @@ const InventoryPage: React.FC = () => {
                                                     <ArrowDownCircle size={18} />
                                                 </button>
                                                 <button 
+                                                    onClick={() => handleOpenTransfer(product.id_venta)}
+                                                    title="Transferir Stock"
+                                                    className="p-1 text-secondary hover:bg-secondary/10 rounded"
+                                                >
+                                                    <RefreshCw size={18} />
+                                                </button>
+                                                <button 
                                                     onClick={() => handleOpenEditProduct(product)}
                                                     title="Editar Producto"
                                                     className="p-1 text-primary hover:bg-primary/10 rounded"
@@ -1023,6 +1096,83 @@ const InventoryPage: React.FC = () => {
                 </form>
             </div>
         </Modal>
+
+            {/* Modal de Transferencia de Stock */}
+            <Modal 
+                isOpen={isTransferModalOpen} 
+                onClose={() => setIsTransferModalOpen(false)} 
+                title="Transferencia entre Ubicaciones"
+            >
+                <form onSubmit={handleSaveTransfer} className="space-y-4">
+                    <div className="p-3 bg-secondary/10 rounded-md">
+                        <p className="text-sm text-text-main">
+                            Transferir <strong>{products.find(p => p.id_venta === transferData.productId)?.description}</strong>
+                        </p>
+                        <p className="text-xs text-text-light mt-1">
+                            Código: {transferData.productId}
+                        </p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-text-main">Desde (Origen)</label>
+                            <select 
+                                className="mt-1 block w-full p-2 border border-accent rounded-md bg-white"
+                                value={transferData.fromLocationId}
+                                onChange={(e) => setTransferData(prev => ({ ...prev, fromLocationId: e.target.value }))}
+                            >
+                                {locations.map(loc => (
+                                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                                ))}
+                            </select>
+                            <p className="text-[10px] text-text-light mt-1 pl-1">
+                                Disponible: {getStockForProductAndLocation(transferData.productId, transferData.fromLocationId)}
+                            </p>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-text-main">Hacia (Destino)</label>
+                            <select 
+                                className="mt-1 block w-full p-2 border border-accent rounded-md bg-white"
+                                value={transferData.toLocationId}
+                                onChange={(e) => setTransferData(prev => ({ ...prev, toLocationId: e.target.value }))}
+                            >
+                                {locations.map(loc => (
+                                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-text-main">Cantidad a Transferir</label>
+                        <input 
+                            type="number" 
+                            min="1"
+                            max={getStockForProductAndLocation(transferData.productId, transferData.fromLocationId)}
+                            required
+                            className="mt-1 block w-full p-2 border border-accent rounded-md bg-white"
+                            value={transferData.quantity || ''}
+                            onChange={(e) => setTransferData(prev => ({ ...prev, quantity: Number(e.target.value) }))}
+                        />
+                    </div>
+                    
+                    <div>
+                        <label className="block text-sm font-medium text-text-main">Nota / Motivo</label>
+                        <textarea 
+                            placeholder="Ej: Traslado a tienda, reposición..."
+                            className="mt-1 block w-full p-2 border border-accent rounded-md bg-white"
+                            rows={2}
+                            value={transferData.reason}
+                            onChange={(e) => setTransferData(prev => ({ ...prev, reason: e.target.value }))}
+                        />
+                    </div>
+
+                    <div className="flex justify-end space-x-2 pt-4">
+                        <Button type="button" variant="secondary" onClick={() => setIsTransferModalOpen(false)}>Cancelar</Button>
+                        <Button type="submit" variant="secondary">Efectuar Transferencia</Button>
+                    </div>
+                </form>
+            </Modal>
 
             {/* Modal de Ajuste de Stock */}
             <Modal 
