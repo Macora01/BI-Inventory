@@ -38,16 +38,6 @@ async function initDb() {
         return false;
     }
 
-    console.log('DATABASE_URL detected. Attempting to connect to PostgreSQL...');
-    
-    // Debug de partes de la URL (sin mostrar contraseña)
-    try {
-        const url = new URL(dbUrl);
-        console.log(`[DEBUG CONEXIÓN] Host: ${url.hostname}, User: ${url.username}, DB: ${url.pathname.slice(1)}, Port: ${url.port}`);
-    } catch (e) {
-        console.log('[DEBUG CONEXIÓN] La DATABASE_URL no tiene un formato de URL estándar.');
-    }
-
     try {
         const currentPool = getPool();
         if (!currentPool) return false;
