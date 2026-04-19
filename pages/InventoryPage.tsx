@@ -405,6 +405,7 @@ const InventoryPage: React.FC = () => {
             Papa.parse(content, {
                 header: true,
                 skipEmptyLines: true,
+                delimiter: "",
                 complete: async (results) => {
                     await processData(results.data);
                 }
@@ -481,6 +482,7 @@ const InventoryPage: React.FC = () => {
             Papa.parse(content, {
                 header: true,
                 skipEmptyLines: true,
+                delimiter: "",
                 complete: async (results) => {
                     await processData(results.data);
                 }
@@ -567,7 +569,7 @@ const InventoryPage: React.FC = () => {
             Papa.parse(content, {
                 header: true,
                 skipEmptyLines: true,
-                delimiter: ";",
+                delimiter: "",
                 complete: async (results) => {
                     await processData(results.data);
                 }
@@ -1125,15 +1127,15 @@ const InventoryPage: React.FC = () => {
                 </form>
             </Modal>
 
-            {/* Modal de Importación CSV */}
+            {/* Modal de Importación (CSV / XLSX) */}
             <Modal 
                 isOpen={isImportModalOpen} 
                 onClose={() => setIsImportModalOpen(false)} 
-                title="Importar Datos desde CSV"
+                title="Importar Datos desde CSV / Excel (XLSX)"
             >
                 <div className="space-y-6">
                     <p className="text-sm text-text-main">
-                        Seleccione el tipo de archivo que desea cargar. Asegúrese de que el formato coincida con los campos requeridos.
+                        Seleccione el tipo de archivo que desea cargar (Formatos soportados: <strong>.csv</strong> y <strong>.xlsx</strong>). Asegúrese de que el formato coincida con los campos requeridos.
                     </p>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1204,15 +1206,15 @@ const InventoryPage: React.FC = () => {
                     </div>
 
                     <div className="bg-background-light p-3 rounded-md border border-accent">
-                        <h5 className="text-xs font-bold text-primary uppercase mb-2">Formatos Esperados (Cabeceras):</h5>
+                        <h5 className="text-xs font-bold text-primary uppercase mb-2">Formatos y Cabeceras Esperadas (.csv / .xlsx):</h5>
                         <ul className="text-[10px] space-y-1 text-text-main list-disc pl-4">
                             <li><strong>Catálogo:</strong> id_venta, id_fabrica, description, price, cost, minStock</li>
-                            <li><strong>Inventario:</strong> id_venta, id_fabrica, description, price, cost, qty</li>
+                            <li><strong>Inventario Inicial:</strong> id_venta, id_fabrica, description, price, cost, qty</li>
                             <li><strong>Transferencias:</strong> sitio_inicial, sitio_final, id_venta, qty <br/>
-                                <span className="text-[9px] text-text-light italic">(Ej: Bod_Prin, Alma_VLT, PROD01, 1)</span>
+                                <span className="text-[9px] text-text-light italic">(Ej: Bodega Central, Vitacura, PROD01, 10)</span>
                             </li>
-                            <li><strong>Ventas:</strong> fecha; lugar; [id_transaccion]; id_venta; precio <br/>
-                                <span className="text-[9px] text-text-light italic">(Ej: 31-03-2024; Alma_VLT; 343; VENTA01; 100)</span>
+                            <li><strong>Ventas Diarias:</strong> fecha; lugar; id_venta; precio <br/>
+                                <span className="text-[9px] text-text-light italic">(Ej: 31-03-2024; Vitacura; VENTA01; 100)</span>
                             </li>
                         </ul>
                     </div>

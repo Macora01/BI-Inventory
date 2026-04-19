@@ -48,33 +48,90 @@ async function initDb() {
             await client.query(`
                 CREATE TABLE IF NOT EXISTS products (
                     id_venta TEXT PRIMARY KEY,
+                    id_fabrica TEXT,
                     description TEXT,
-                    factory_id TEXT,
-                    category TEXT,
                     price NUMERIC,
                     cost NUMERIC,
-                    image_url TEXT
+                    image TEXT,
+                    "minStock" NUMERIC DEFAULT 2
                 );
+                
+                -- Migraciones para products
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='factory_id') THEN
+                        ALTER TABLE products RENAME COLUMN factory_id TO id_fabrica;
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='image_url') THEN
+                        ALTER TABLE products RENAME COLUMN image_url TO image;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='products' AND column_name='minStock') THEN
+                        ALTER TABLE products ADD COLUMN "minStock" NUMERIC DEFAULT 2;
+                    END IF;
+                END $$;
+
                 CREATE TABLE IF NOT EXISTS locations (
                     id TEXT PRIMARY KEY,
-                    name TEXT
+                    name TEXT,
+                    type TEXT
                 );
+
+                -- Migraciones para locations
+                DO $$ BEGIN
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='locations' AND column_name='type') THEN
+                        ALTER TABLE locations ADD COLUMN type TEXT DEFAULT 'FIXED_STORE_PERMANENT';
+                    END IF;
+                END $$;
+
                 CREATE TABLE IF NOT EXISTS stock (
-                    product_id TEXT REFERENCES products(id_venta),
-                    location_id TEXT REFERENCES locations(id),
+                    "productId" TEXT REFERENCES products(id_venta),
+                    "locationId" TEXT REFERENCES locations(id),
                     quantity NUMERIC,
-                    PRIMARY KEY (product_id, location_id)
+                    PRIMARY KEY ("productId", "locationId")
                 );
+
+                -- Migraciones para stock
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='stock' AND column_name='product_id') THEN
+                        ALTER TABLE stock RENAME COLUMN product_id TO "productId";
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='stock' AND column_name='location_id') THEN
+                        ALTER TABLE stock RENAME COLUMN location_id TO "locationId";
+                    END IF;
+                END $$;
+
                 CREATE TABLE IF NOT EXISTS movements (
                     id TEXT PRIMARY KEY,
-                    product_id TEXT,
-                    from_location_id TEXT,
-                    to_location_id TEXT,
+                    "productId" TEXT,
+                    "fromLocationId" TEXT,
+                    "toLocationId" TEXT,
                     quantity NUMERIC,
                     type TEXT,
                     reason TEXT,
-                    date TEXT
+                    timestamp TEXT,
+                    "relatedFile" TEXT,
+                    price NUMERIC,
+                    cost NUMERIC
                 );
+
+                -- Migraciones para movements
+                DO $$ BEGIN
+                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='movements' AND column_name='product_id') THEN
+                        ALTER TABLE movements RENAME COLUMN product_id TO "productId";
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='movements' AND column_name='from_location_id') THEN
+                        ALTER TABLE movements RENAME COLUMN from_location_id TO "fromLocationId";
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='movements' AND column_name='to_location_id') THEN
+                        ALTER TABLE movements RENAME COLUMN to_location_id TO "toLocationId";
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='movements' AND column_name='date') THEN
+                        ALTER TABLE movements RENAME COLUMN date TO timestamp;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='movements' AND column_name='relatedFile') THEN
+                        ALTER TABLE movements ADD COLUMN "relatedFile" TEXT;
+                    END IF;
+                END $$;
+
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,
                     username TEXT UNIQUE,
@@ -201,20 +258,24 @@ async function startServer() {
                 if (products) {
                     for (const p of products) {
                         const keys = Object.keys(p);
+                        const quotedKeys = keys.map(k => `"${k}"`).join(',');
                         const placeholders = keys.map((_, i) => `$${i + 1}`).join(',');
-                        const updates = keys.map((k, i) => `${k} = $${i + 1}`).join(',');
-                        await currentPool.query(`INSERT INTO products (${keys.join(',')}) VALUES (${placeholders}) ON CONFLICT (id_venta) DO UPDATE SET ${updates}`, Object.values(p));
+                        const updates = keys.map((k, i) => `"${k}" = $${i + 1}`).join(',');
+                        await currentPool.query(`INSERT INTO products (${quotedKeys}) VALUES (${placeholders}) ON CONFLICT (id_venta) DO UPDATE SET ${updates}`, Object.values(p));
                     }
                 }
                 if (stock) {
                     for (const s of stock) {
-                        await currentPool.query(`INSERT INTO stock (product_id, location_id, quantity) VALUES ($1, $2, $3) ON CONFLICT (product_id, location_id) DO UPDATE SET quantity = $3`, [s.productId, s.locationId, s.quantity]);
+                        await currentPool.query(`INSERT INTO stock ("productId", "locationId", quantity) VALUES ($1, $2, $3) ON CONFLICT ("productId", "locationId") DO UPDATE SET quantity = $3`, [s.productId, s.locationId, s.quantity]);
                     }
                 }
                 if (movements) {
                     for (const m of movements) {
                         const pk = m.id || `mov-${Date.now()}-${Math.random()}`;
-                        await currentPool.query(`INSERT INTO movements (id, product_id, from_location_id, to_location_id, quantity, type, reason, date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (id) DO NOTHING`, [pk, m.productId, m.fromLocationId, m.toLocationId, m.quantity, m.type, m.reason, m.date]);
+                        const keys = Object.keys(m);
+                        const quotedKeys = keys.map(k => `"${k}"`).join(',');
+                        const placeholders = keys.map((_, i) => `$${i + 1}`).join(',');
+                        await currentPool.query(`INSERT INTO movements (${quotedKeys}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`, Object.values(m));
                     }
                 }
                 await currentPool.query('COMMIT');
@@ -239,9 +300,9 @@ async function startServer() {
         if (isPgActive && currentPool) {
             try {
                 await currentPool.query(`
-                    INSERT INTO stock (product_id, location_id, quantity)
+                    INSERT INTO stock ("productId", "locationId", quantity)
                     VALUES ($1, $2, $3)
-                    ON CONFLICT (product_id, location_id)
+                    ON CONFLICT ("productId", "locationId")
                     DO UPDATE SET quantity = stock.quantity + $3
                 `, [productId, locationId, quantityChange]);
                 res.json({ success: true });
@@ -353,14 +414,15 @@ async function startServer() {
                 } else {
                     const keys = Object.keys(newItem);
                     const values = Object.values(newItem);
+                    const quotedKeys = keys.map(k => `"${k}"`).join(',');
                     const idField = entity === 'products' ? 'id_venta' : 'id';
                     const placeholders = keys.map((_, i) => `$${i + 1}`).join(',');
-                    const updates = keys.map((k, i) => `${k} = $${i + 1}`).join(',');
+                    const updates = keys.map((k, i) => `"${k}" = $${i + 1}`).join(',');
                     
-                    await pool.query(`
-                        INSERT INTO ${entity} (${keys.join(',')}) 
+                    await currentPool.query(`
+                        INSERT INTO ${entity} (${quotedKeys}) 
                         VALUES (${placeholders}) 
-                        ON CONFLICT (${idField}) DO UPDATE SET ${updates}`, values);
+                        ON CONFLICT ("${idField}") DO UPDATE SET ${updates}`, values);
                 }
                 res.json({ success: true });
             } catch (err: any) {
