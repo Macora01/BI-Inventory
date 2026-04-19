@@ -39,5 +39,5 @@ ENV NODE_ENV=production
 # Expose port
 EXPOSE 3000
 
-# Start command (using tsx to run the TypeScript server in production)
-CMD ["npx", "tsx", "server.ts"]
+# Start command (using local tsx to run the TypeScript server in production)
+CMD ["./node_modules/.bin/tsx", "server.ts"]
