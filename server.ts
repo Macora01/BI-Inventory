@@ -16,11 +16,14 @@ const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
 });
 
+let isPgActive = false;
+let dbInitError: string | null = null;
+
 async function initDb() {
     console.log('--- Database Initialization ---');
     if (!process.env.DATABASE_URL) {
         console.warn('DATABASE_URL is not defined in environment variables.');
-        console.warn('Falling back to LOCAL JSON files mode.');
+        dbInitError = 'La variable de entorno DATABASE_URL no fue detectada.';
         return false;
     }
 
@@ -67,6 +70,7 @@ async function initDb() {
                 );
             `);
             console.log('PostgreSQL Tables initialized successfully');
+            isPgActive = true;
             return true;
         } finally {
             client.release();
@@ -74,13 +78,13 @@ async function initDb() {
     } catch (err: any) {
         console.error('CRITICAL: Failed to connect to PostgreSQL database.');
         console.error('Error message:', err.message);
-        console.error('Full connection string (masked):', process.env.DATABASE_URL?.replace(/:([^@]+)@/, ':****@'));
+        dbInitError = err.message;
         return false;
     }
 }
 
 async function startServer() {
-    const isPgActive = await initDb();
+    await initDb();
     const app = express();
     const port = 3000;
 
@@ -150,7 +154,7 @@ async function startServer() {
         } else {
             // Si PG no está activo, estamos en modo JSON
             status = 'connected'; 
-            error = 'La variable de entorno DATABASE_URL no fue detectada por el servidor.';
+            error = dbInitError || 'PostgreSQL no está activo (Modo Backup JSON)';
         }
 
         res.json({ 
