@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gestión de Inventario Boa Ideia</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'primary': '#5f2e0a',      // Marrón silla de montar
+            'secondary': '#A0522D',    // Marrón tierra (usando el segundo valor sugerido para variación)
+            'accent': '#dec290',       // Beige claro para fondos de elementos
+            'background': '#FDFBF5',   // Beige muy claro para el fondo de la página
+            'container-bg': '#F7F1E6', // Un beige intermedio para contenedores
+            'text-main': '#5D4037',     // Marrón oscuro para texto principal
+            'text-light': '#8D6E63',    // Marrón medio para texto secundario
+            'danger': '#a52a2a'        // Marrón Rojizo para errores
+          }
+        }
+      }
+    }
+  </script>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://esm.sh/@google/genai",
+    "papaparse": "https://esm.sh/papaparse"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-background text-text-main">
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>

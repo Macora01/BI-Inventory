@@ -1,0 +1,8 @@
+node_modules
+dist
+data/*.json
+uploads/*
+.env
+.git
+.vscode
+.gemini

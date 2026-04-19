@@ -1,0 +1,6 @@
+{
+  "name": "Gestión de Inventario Boa Ideia",
+  "description": "Una aplicación web para el seguimiento y gestión de inventario, incluyendo entradas, salidas, transferencias, reportes y un dashboard ejecutivo. Permite la carga de datos a través de archivos CSV para una gestión eficiente.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": []
+}
