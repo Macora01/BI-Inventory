@@ -398,19 +398,20 @@ async function startServer() {
         const newItem = req.body;
         if (!entities.includes(entity)) return res.status(404).json({ error: 'Invalid entity' });
 
-        if (isPgActive) {
+        const currentPool = getPool();
+        if (isPgActive && currentPool) {
             try {
                 if (Array.isArray(newItem)) {
                     // Bulk replace for simple entities
-                    await pool.query('BEGIN');
-                    await pool.query(`DELETE FROM ${entity}`);
+                    await currentPool.query('BEGIN');
+                    await currentPool.query(`DELETE FROM ${entity}`);
                     for (const item of newItem) {
                         const keys = Object.keys(item);
                         const values = Object.values(item);
                         const placeholders = keys.map((_, i) => `$${i + 1}`).join(',');
-                        await pool.query(`INSERT INTO ${entity} (${keys.join(',')}) VALUES (${placeholders})`, values);
+                        await currentPool.query(`INSERT INTO ${entity} (${keys.join(',')}) VALUES (${placeholders})`, values);
                     }
-                    await pool.query('COMMIT');
+                    await currentPool.query('COMMIT');
                 } else {
                     const keys = Object.keys(newItem);
                     const values = Object.values(newItem);
@@ -426,7 +427,7 @@ async function startServer() {
                 }
                 res.json({ success: true });
             } catch (err: any) {
-                await pool.query('ROLLBACK').catch(() => {});
+                await currentPool.query('ROLLBACK').catch(() => {});
                 res.status(500).json({ error: err.message });
             }
         } else {

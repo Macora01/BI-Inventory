@@ -18,7 +18,7 @@ const DashboardPage: React.FC = () => {
         if (!Array.isArray(stock) || !Array.isArray(products)) return 0;
         return stock.reduce((total, s) => {
             const product = products.find(p => p.id_venta === s.productId);
-            return total + (product ? product.cost * s.quantity : 0);
+            return total + (product ? Number(product.cost) * Number(s.quantity) : 0);
         }, 0);
     }, [stock, products]);
 
@@ -26,7 +26,7 @@ const DashboardPage: React.FC = () => {
         if (!Array.isArray(stock) || !Array.isArray(products)) return 0;
         return stock.reduce((total, s) => {
             const product = products.find(p => p.id_venta === s.productId);
-            return total + (product ? product.price * s.quantity : 0);
+            return total + (product ? Number(product.price) * Number(s.quantity) : 0);
         }, 0);
     }, [stock, products]);
 
@@ -34,21 +34,21 @@ const DashboardPage: React.FC = () => {
     
     const totalUnits = useMemo(() => {
         if (!Array.isArray(stock)) return 0;
-        return stock.reduce((sum, s) => sum + s.quantity, 0);
+        return stock.reduce((sum, s) => sum + Number(s.quantity), 0);
     }, [stock]);
 
     const totalSoldUnits = useMemo(() => {
         if (!Array.isArray(movements)) return 0;
         return movements
             .filter(m => m.type === 'SALE')
-            .reduce((sum, m) => sum + m.quantity, 0);
+            .reduce((sum, m) => sum + Number(m.quantity), 0);
     }, [movements]);
     
     const lowStockItems = useMemo(() => {
         if (!Array.isArray(stock) || !Array.isArray(products)) return 0;
         
         const totalStockByProduct = stock.reduce((acc, s) => {
-            acc[s.productId] = (acc[s.productId] || 0) + s.quantity;
+            acc[s.productId] = (acc[s.productId] || 0) + Number(s.quantity);
             return acc;
         }, {} as Record<string, number>);
 
@@ -65,7 +65,7 @@ const DashboardPage: React.FC = () => {
         const salesByProduct = sales.reduce((acc, sale) => {
             const product = products.find(p => p.id_venta === sale.productId);
             if(product) {
-                acc[product.description] = (acc[product.description] || 0) + sale.quantity;
+                acc[product.description] = (acc[product.description] || 0) + Number(sale.quantity);
             }
             return acc;
         }, {} as Record<string, number>);
@@ -82,7 +82,7 @@ const DashboardPage: React.FC = () => {
         const distribution = stock.reduce((acc, s) => {
             const location = locations.find(l => l.id === s.locationId);
             const name = location ? location.name : 'Desconocido';
-            acc[name] = (acc[name] || 0) + s.quantity;
+            acc[name] = (acc[name] || 0) + Number(s.quantity);
             return acc;
         }, {} as Record<string, number>);
 
@@ -105,7 +105,7 @@ const DashboardPage: React.FC = () => {
                 m.type === 'SALE' && 
                 new Date(m.timestamp).toISOString().split('T')[0] === date
             );
-            const total = daySales.reduce((sum, s) => sum + (s.price || 0) * s.quantity, 0);
+            const total = daySales.reduce((sum, s) => sum + (Number(s.price) || 0) * Number(s.quantity), 0);
             const displayDate = new Date(date).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' });
             return { date: displayDate, monto: total };
         });
@@ -144,9 +144,9 @@ const DashboardPage: React.FC = () => {
                 <StatCard icon={DollarSign} title="Valor Inventario" value={`$${inventoryValue.toLocaleString('es-CL')}`} />
                 <StatCard icon={TrendingUp} title="Margen Potencial" value={`$${potentialMargin.toLocaleString('es-CL')}`} variant="success" />
                 <StatCard icon={Activity} title="Salud Inventario" value={`${healthScore}%`} variant={healthScore > 80 ? 'success' : 'warning'} />
-                <StatCard icon={AlertTriangle} title="Items Bajo Stock" value={lowStockItems.toString()} variant="danger" />
-                <StatCard icon={Package} title="Total Unidades" value={totalUnits.toString()} />
-                <StatCard icon={ShoppingCart} title="Total Ventas" value={totalSoldUnits.toString()} variant="success" />
+                <StatCard icon={AlertTriangle} title="Items Bajo Stock" value={lowStockItems.toLocaleString('es-CL')} variant="danger" />
+                <StatCard icon={Package} title="Total Unidades" value={totalUnits.toLocaleString('es-CL')} />
+                <StatCard icon={ShoppingCart} title="Total Ventas" value={totalSoldUnits.toLocaleString('es-CL')} variant="success" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

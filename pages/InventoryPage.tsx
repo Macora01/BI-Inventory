@@ -93,7 +93,7 @@ const InventoryPage: React.FC = () => {
     // Función para obtener el stock de un producto en una ubicación específica.
     const getStockForProductAndLocation = (productId: string, locationId: string): number => {
         const stockItem = stock.find(s => s.productId === productId && s.locationId === locationId);
-        return stockItem ? stockItem.quantity : 0;
+        return stockItem ? Number(stockItem.quantity) : 0;
     };
 
     const currentSelectedProduct = useMemo(() => {
@@ -675,7 +675,7 @@ const InventoryPage: React.FC = () => {
                             ) : filteredProducts.map(product => {
                                 const totalStock = stock
                                     .filter(s => s.productId === product.id_venta)
-                                    .reduce((sum, s) => sum + s.quantity, 0);
+                                    .reduce((sum, s) => sum + Number(s.quantity), 0);
                                 
                                 const isLowStock = totalStock < (product.minStock ?? 2);
 

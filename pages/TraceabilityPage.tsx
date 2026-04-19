@@ -33,7 +33,7 @@ const TraceabilityPage: React.FC = () => {
 
             const currentStock = stock
                 .filter(s => s.productId === productId)
-                .reduce((sum, s) => sum + s.quantity, 0);
+                .reduce((sum, s) => sum + Number(s.quantity), 0);
 
             setTraceabilityData({
                 history: history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
@@ -63,7 +63,7 @@ const TraceabilityPage: React.FC = () => {
 
             const currentStock = stock
                 .filter(s => s.productId === upperCode)
-                .reduce((sum, s) => sum + s.quantity, 0);
+                .reduce((sum, s) => sum + Number(s.quantity), 0);
 
             setTraceabilityData({
                 history: history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
