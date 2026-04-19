@@ -134,7 +134,9 @@ const SettingsPage: React.FC = () => {
             if (response.ok) {
                 addToast('Logo actualizado correctamente.', 'success');
                 setLogoFile(null);
+                // Forzar actualización añadiendo un cache-buster
                 await fetchLogo();
+                // Opcional: recargar con timestamp si fetchLogo no es suficiente
             } else {
                 const data = await response.json();
                 addToast(data.error || 'Error al subir el logo.', 'error');

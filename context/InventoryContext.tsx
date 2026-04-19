@@ -114,7 +114,9 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             const res = await fetch('/api/settings/logo');
             if (res.ok) {
                 const data = await res.json();
-                setLogo(data.logo);
+                // Añadir cache buster para forzar actualización
+                const logoUrl = data.logo ? `${data.logo}?t=${Date.now()}` : null;
+                setLogo(logoUrl);
             }
         } catch (err) {
             console.error('Error fetching logo:', err);
