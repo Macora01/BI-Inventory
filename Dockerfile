@@ -30,8 +30,6 @@ COPY --from=build /app/dist ./dist
 COPY --from=build /app/server.ts ./
 COPY --from=build /app/version.ts ./
 COPY --from=build /app/types.ts ./
-# Copy initial data directory
-COPY --from=build /app/data ./data
 
 # Set environment to production
 ENV NODE_ENV=production
