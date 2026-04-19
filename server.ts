@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -148,7 +149,8 @@ async function startServer() {
             }
         } else {
             // Si PG no está activo, estamos en modo JSON
-            status = 'connected'; // JSON siempre está "conectado" ya que son archivos
+            status = 'connected'; 
+            error = 'La variable de entorno DATABASE_URL no fue detectada por el servidor.';
         }
 
         res.json({ 
