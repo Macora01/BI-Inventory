@@ -16,14 +16,18 @@ const pool = new Pool({
 });
 
 async function initDb() {
+    console.log('--- Database Initialization ---');
     if (!process.env.DATABASE_URL) {
-        console.warn('DATABASE_URL not set, falling back to JSON files mode (not recommended for production).');
+        console.warn('DATABASE_URL is not defined in environment variables.');
+        console.warn('Falling back to LOCAL JSON files mode.');
         return false;
     }
 
+    console.log('DATABASE_URL detected. Attempting to connect to PostgreSQL...');
     try {
         const client = await pool.connect();
         try {
+            console.log('Connected to PostgreSQL. Initializing tables...');
             await client.query(`
                 CREATE TABLE IF NOT EXISTS products (
                     id_venta TEXT PRIMARY KEY,
@@ -66,8 +70,10 @@ async function initDb() {
         } finally {
             client.release();
         }
-    } catch (err) {
-        console.error('Failed to connect to PostgreSQL:', err);
+    } catch (err: any) {
+        console.error('CRITICAL: Failed to connect to PostgreSQL database.');
+        console.error('Error message:', err.message);
+        console.error('Full connection string (masked):', process.env.DATABASE_URL?.replace(/:([^@]+)@/, ':****@'));
         return false;
     }
 }
@@ -128,18 +134,30 @@ async function startServer() {
 
     // Health / Status
     app.get('/api/health', async (req, res) => {
-        let dbStatus = 'disconnected';
+        let status = 'disconnected';
+        let engine = isPgActive ? 'postgresql' : 'json';
+        let error = null;
+
         if (isPgActive) {
             try {
                 await pool.query('SELECT 1');
-                dbStatus = 'connected (PostgreSQL)';
-            } catch {
-                dbStatus = 'error (PostgreSQL)';
+                status = 'connected';
+            } catch (err: any) {
+                status = 'error';
+                error = err.message;
             }
         } else {
-            dbStatus = 'connected (Local JSON)';
+            // Si PG no está activo, estamos en modo JSON
+            status = 'connected'; // JSON siempre está "conectado" ya que son archivos
         }
-        res.json({ database: dbStatus, server: 'ok' });
+
+        res.json({ 
+            status, 
+            database: isPgActive && status === 'connected' ? 'connected' : 'disconnected',
+            engine,
+            error,
+            server: 'ok' 
+        });
     });
 
     // Logo

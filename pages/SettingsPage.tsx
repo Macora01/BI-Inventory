@@ -237,10 +237,17 @@ const SettingsPage: React.FC = () => {
                                         <span className="text-sm text-success font-medium">Conectado a PostgreSQL</span>
                                     </>
                                 ) : (
-                                    <>
-                                        <XCircle size={14} className="text-danger" />
-                                        <span className="text-sm text-danger font-medium">Desconectado (Usando DB Local Temporal)</span>
-                                    </>
+                                    <div className="flex flex-col">
+                                        <div className="flex items-center space-x-2">
+                                            <XCircle size={14} className="text-danger" />
+                                            <span className="text-sm text-danger font-medium">Desconectado (Usando DB Local Temporal)</span>
+                                        </div>
+                                        {dbStatus?.error && (
+                                            <p className="text-[10px] text-danger mt-1 font-mono bg-danger/5 p-1 rounded">
+                                                Error: {dbStatus.error}
+                                            </p>
+                                        )}
+                                    </div>
                                 )}
                             </div>
                         </div>
