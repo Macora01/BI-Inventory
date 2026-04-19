@@ -11,17 +11,28 @@ const { Pool } = pg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Database initialization
-const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-});
+// Database connection pool (initialized lazily)
+let pool: any = null;
+
+function getPool() {
+    if (!pool && process.env.DATABASE_URL) {
+        pool = new Pool({
+            connectionString: process.env.DATABASE_URL,
+            // Agregar un pequeño timeout para no dejar colgada la app
+            connectionTimeoutMillis: 5000,
+        });
+    }
+    return pool;
+}
 
 let isPgActive = false;
 let dbInitError: string | null = null;
 
 async function initDb() {
     console.log('--- Database Initialization ---');
-    if (!process.env.DATABASE_URL) {
+    const dbUrl = process.env.DATABASE_URL;
+    
+    if (!dbUrl) {
         console.warn('DATABASE_URL is not defined in environment variables.');
         dbInitError = 'La variable de entorno DATABASE_URL no fue detectada.';
         return false;
@@ -31,14 +42,17 @@ async function initDb() {
     
     // Debug de partes de la URL (sin mostrar contraseña)
     try {
-        const url = new URL(process.env.DATABASE_URL);
+        const url = new URL(dbUrl);
         console.log(`[DEBUG CONEXIÓN] Host: ${url.hostname}, User: ${url.username}, DB: ${url.pathname.slice(1)}, Port: ${url.port}`);
     } catch (e) {
-        console.log('[DEBUG CONEXIÓN] La DATABASE_URL no tiene un formato de URL estándar, usando directamente.');
+        console.log('[DEBUG CONEXIÓN] La DATABASE_URL no tiene un formato de URL estándar.');
     }
 
     try {
-        const client = await pool.connect();
+        const currentPool = getPool();
+        if (!currentPool) return false;
+
+        const client = await currentPool.connect();
         try {
             console.log('Connected to PostgreSQL. Initializing tables...');
             await client.query(`
@@ -154,8 +168,11 @@ async function startServer() {
 
         if (isPgActive) {
             try {
-                await pool.query('SELECT 1');
-                status = 'connected';
+                const currentPool = getPool();
+                if (currentPool) {
+                    await currentPool.query('SELECT 1');
+                    status = 'connected';
+                }
             } catch (err: any) {
                 status = 'error';
                 error = err.message;
@@ -211,9 +228,12 @@ async function startServer() {
         const { entity } = req.params;
         if (!entities.includes(entity)) return res.status(404).json({ error: 'Invalid entity' });
 
+        const isPgActive = dbInitError === null && process.env.DATABASE_URL;
+
         if (isPgActive) {
             try {
-                const result = await pool.query(`SELECT * FROM ${entity}`);
+                const currentPool = getPool();
+                const result = await currentPool.query(`SELECT * FROM ${entity}`);
                 // Map snake_case to camelCase for some fields if needed
                 const rows = result.rows.map(row => {
                     const mapped: any = { ...row };
