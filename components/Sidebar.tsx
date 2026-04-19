@@ -37,7 +37,7 @@ const Sidebar: React.FC = () => {
         <aside className="w-64 bg-primary text-white flex flex-col shadow-xl">
             <div className="p-8 flex flex-col items-center border-b border-white/10">
                 {logo ? (
-                    <img src={logo} alt="Boa Ideia Logo" className="h-16 w-auto mb-4 object-contain filter invert brightness-0" />
+                    <img src={logo} alt="Boa Ideia Logo" className="h-16 w-auto mb-4 object-contain max-h-16" />
                 ) : (
                     <Zap className="text-secondary mb-2" size={40} />
                 )}
