@@ -1,9 +1,15 @@
+/**
+ * MovementsPage.tsx
+ * Version: 1.2.004
+ */
 import React, { useCallback } from 'react';
 import Card from '../components/Card';
 import FileUpload from '../components/FileUpload';
 import { useInventory } from '../context/InventoryContext';
 import { useToast } from '../hooks/useToast';
 import { parseInitialInventoryCSV, parseSalesCSV, parseTransferCSV } from '../services/csvParser';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { MovementType, Product } from '../types';
 import { MOVEMENT_TYPE_MAP } from '../constants';
 
@@ -19,32 +25,45 @@ const MovementsPage: React.FC = () => {
     };
 
     const processInitialInventory = useCallback(async (content: string, file: File) => {
-        try {
-            const parsedData = parseInitialInventoryCSV(content);
+        const processData = async (data: any[]) => {
             const newProducts: Product[] = [];
             const newStock = [];
             const newMovements = [];
 
-            for (const item of parsedData) {
+            const normalizeItem = (raw: any) => {
+                const norm: any = {};
+                for (const k in raw) {
+                    const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
+                    norm[nk] = raw[k];
+                }
+                return norm;
+            };
+
+            for (const rawItem of data) {
+                const item = normalizeItem(rawItem);
+                const idVenta = String(item.idventa || item.codigo || item.idproducto || item.codventa || '');
+                if (!idVenta) continue;
+
                 const product: Product = {
-                    id_venta: item.id_venta,
-                    price: item.price,
-                    cost: item.cost,
-                    id_fabrica: item.id_fabrica,
-                    description: item.description,
+                    id_venta: idVenta,
+                    price: Number(item.precio || item.price || 0),
+                    cost: Number(item.costo || item.cost || 0),
+                    id_fabrica: String(item.idfabrica || item.fabricid || ''),
+                    description: String(item.descripcion || item.description || ''),
                 };
                 newProducts.push(product);
                 
+                const qty = Number(item.qty || item.cantidad || 0);
                 newStock.push({
-                    productId: item.id_venta,
+                    productId: idVenta,
                     locationId: 'main_warehouse',
-                    quantity: item.qty,
+                    quantity: qty,
                 });
 
                 newMovements.push({
-                    id: `mov_${Date.now()}_${item.id_venta}`,
-                    productId: item.id_venta,
-                    quantity: item.qty,
+                    id: `mov_${Date.now()}_${idVenta}`,
+                    productId: idVenta,
+                    quantity: qty,
                     type: MovementType.INITIAL_LOAD,
                     toLocationId: 'main_warehouse',
                     timestamp: new Date(),
@@ -53,26 +72,61 @@ const MovementsPage: React.FC = () => {
             }
             await setInitialData(newProducts, newStock, newMovements);
             addToast(`Carga inicial desde '${file.name}' procesada con éxito.`, 'success');
+        };
+
+        try {
+            if (file.name.endsWith('.xlsx')) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    await processData(jsonData);
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                Papa.parse(content, {
+                    header: true,
+                    skipEmptyLines: true,
+                    delimiter: "",
+                    complete: async (results) => {
+                        await processData(results.data);
+                    }
+                });
+            }
         } catch (error: any) {
             addToast(`Error procesando archivo inicial: ${error.message}`, 'error');
         }
     }, [setInitialData, addToast]);
 
     const processAppendInventory = useCallback(async (content: string, file: File) => {
-        try {
-            const parsedData = parseInitialInventoryCSV(content);
+        const processData = async (data: any[]) => {
             let addedCount = 0;
             let updatedCount = 0;
 
-            for (const item of parsedData) {
-                const existingProduct = products.find(p => p.id_venta === item.id_venta);
+            const normalizeItem = (raw: any) => {
+                const norm: any = {};
+                for (const k in raw) {
+                    const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
+                    norm[nk] = raw[k];
+                }
+                return norm;
+            };
+
+            for (const rawItem of data) {
+                const item = normalizeItem(rawItem);
+                const idVenta = String(item.idventa || item.codigo || item.idproducto || item.codventa || '');
+                if (!idVenta) continue;
+
+                const existingProduct = products.find(p => p.id_venta === idVenta);
+                const qty = Number(item.qty || item.cantidad || 0);
                 
                 const product: Product = {
-                    id_venta: item.id_venta,
-                    price: item.price,
-                    cost: item.cost,
-                    id_fabrica: item.id_fabrica,
-                    description: item.description,
+                    id_venta: idVenta,
+                    price: Number(item.precio || item.price || 0),
+                    cost: Number(item.costo || item.cost || 0),
+                    id_fabrica: String(item.idfabrica || item.fabricid || ''),
+                    description: String(item.descripcion || item.description || ''),
                 };
 
                 if (existingProduct) {
@@ -83,12 +137,12 @@ const MovementsPage: React.FC = () => {
                     addedCount++;
                 }
 
-                const mainLoc = locations.find(l => l.id === 'main_warehouse' || l.id === 'loc_central') || locations[0];
+                const mainLoc = locations.find(l => l.id === 'main_warehouse' || l.id === 'loc_central' || l.type === 'WAREHOUSE') || locations[0];
                 if (mainLoc) {
-                    await updateStock(item.id_venta, mainLoc.id, item.qty);
+                    await updateStock(idVenta, mainLoc.id, qty);
                     await addMovement({
-                        productId: item.id_venta,
-                        quantity: item.qty,
+                        productId: idVenta,
+                        quantity: qty,
                         type: MovementType.PRODUCT_ADDITION,
                         toLocationId: mainLoc.id,
                         relatedFile: file.name
@@ -96,44 +150,81 @@ const MovementsPage: React.FC = () => {
                 }
             }
             addToast(`Adición procesada: ${addedCount} nuevos, ${updatedCount} actualizados.`, 'success');
+        };
+
+        try {
+            if (file.name.endsWith('.xlsx')) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    await processData(jsonData);
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                Papa.parse(content, {
+                    header: true,
+                    skipEmptyLines: true,
+                    delimiter: "",
+                    complete: async (results) => {
+                        await processData(results.data);
+                    }
+                });
+            }
         } catch (error: any) {
             addToast(`Error procesando adición: ${error.message}`, 'error');
         }
     }, [products, addProduct, updateProduct, updateStock, addMovement, locations, addToast]);
 
     const processTransfers = useCallback(async (content: string, file: File) => {
-        try {
-            const parsedData = parseTransferCSV(content);
+        const processData = async (data: any[]) => {
             const errors: string[] = [];
             const movementsToBatch: any[] = [];
             const stockAdjustments: any[] = [];
 
-            for (const item of parsedData) {
-                const prodId = item.id_venta;
-                const qty = Number(item.qty);
+            // Helper para normalizar llaves
+            const normalizeItem = (raw: any) => {
+                const norm: any = {};
+                for (const k in raw) {
+                    const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
+                    norm[nk] = raw[k];
+                }
+                return norm;
+            };
+
+            for (const rawItem of data) {
+                const item = normalizeItem(rawItem);
+                const prodId = String(item.idventa || item.codigo || item.idproducto || item.id_venta || '');
+                const qty = Number(item.qty || item.cantidad || 0);
                 if (!prodId || qty <= 0) continue;
 
+                const fromLocName = String(item.sitioinicial || item.origen || item.inicial || item.sitio_inicial || '');
+                const toLocName = String(item.sitiofinal || item.destino || item.final || item.sitio_final || '');
+
                 const fromLoc = locations.find(l => 
-                    l.name.toLowerCase() === item.sitio_inicial?.toLowerCase() ||
-                    l.id.toLowerCase() === item.sitio_inicial?.toLowerCase()
+                    l.name.toLowerCase().trim() === fromLocName.toLowerCase().trim() ||
+                    l.id.toLowerCase().trim() === fromLocName.toLowerCase().trim()
                 );
                 const toLoc = locations.find(l => 
-                    l.name.toLowerCase() === item.sitio_final?.toLowerCase() ||
-                    l.id.toLowerCase() === item.sitio_final?.toLowerCase()
+                    l.name.toLowerCase().trim() === toLocName.toLowerCase().trim() ||
+                    l.id.toLowerCase().trim() === toLocName.toLowerCase().trim()
                 );
 
                 if (!fromLoc) {
-                    errors.push(`Error: El sitio inicial "${item.sitio_inicial}" no existe.`);
+                    const available = locations.slice(0, 10).map(l => `${l.id} (${l.name})`).join(', ');
+                    errors.push(`Error: El sitio inicial "${fromLocName}" no existe. Disponibles: ${available}...`);
                     continue;
                 }
                 if (!toLoc) {
-                    errors.push(`Error: El sitio final "${item.sitio_final}" no existe.`);
+                    const available = locations.slice(0, 10).map(l => `${l.id} (${l.name})`).join(', ');
+                    errors.push(`Error: El sitio final "${toLocName}" no existe. Disponibles: ${available}...`);
                     continue;
                 }
 
                 const currentStock = getStock(prodId, fromLoc.id);
                 if (currentStock < qty) {
-                    errors.push(`Error: Stock insuficiente para "${prodId}" en "${item.sitio_inicial}". Disponible: ${currentStock}, Requerido: ${qty}.`);
+                    errors.push(`Error: Stock insuficiente para "${prodId}" en "${fromLocName}". Disponible: ${currentStock}, Requerido: ${qty}.`);
                     continue;
                 }
 
@@ -174,96 +265,144 @@ const MovementsPage: React.FC = () => {
             } else {
                 addToast(`Transferencia desde '${file.name}' procesada exitosamente (${movementsToBatch.length / 2} items).`, 'success');
             }
+        };
+
+        try {
+            if (file.name.endsWith('.xlsx')) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    await processData(jsonData);
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                Papa.parse(content, {
+                    header: true,
+                    skipEmptyLines: true,
+                    delimiter: "",
+                    complete: async (results) => {
+                        await processData(results.data);
+                    }
+                });
+            }
         } catch (error: any) {
             addToast(`Error procesando transferencia: ${error.message}`, 'error');
         }
     }, [addBulkMovements, locations, addToast, getStock]);
 
     const processSales = useCallback(async (content: string, file: File) => {
-        try {
-            const Papa = await import('papaparse');
-            Papa.parse(content, {
-                header: true,
-                skipEmptyLines: true,
-                delimiter: "", // Auto detect
-                complete: async (results) => {
-                    const data = results.data;
-                    const errors: string[] = [];
-                    const movementsToBatch: any[] = [];
-                    const stockAdjustments: any[] = [];
+        const processData = async (data: any[]) => {
+            const errors: string[] = [];
+            const movementsToBatch: any[] = [];
+            const stockAdjustments: any[] = [];
 
-                    for (const item of data as any[]) {
-                        const fechaStr = item['fecha'] || item['fecha(DD-MM-AAA)'] || item['timestamp'];
-                        const lugarStr = item['lugar'] || item['tienda'];
-                        let idVenta = item['id_venta'] || item['cod_venta'] || item['id venta'] || item['codigo'];
-                        let precio = Number(item['precio'] || item['price']) || 0;
-                        let qty = Number(item['qty'] || item['cantidad']) || 1;
+            // Helper para normalizar llaves
+            const normalizeItem = (raw: any) => {
+                const norm: any = {};
+                for (const k in raw) {
+                    const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
+                    norm[nk] = raw[k];
+                }
+                return norm;
+            };
 
-                        const extra = item['__parsed_extra'];
-                        if (extra && extra.length === 1) {
-                            idVenta = item['precio'];
-                            precio = Number(extra[0]) || 0;
-                        }
+            for (const rawItem of data) {
+                const item = normalizeItem(rawItem);
+                const fechaStr = String(item.fecha || item['fecha(dd-mm-aaa)'] || item.timestamp || '');
+                const lugarStr = String(item.lugar || item.tienda || '');
+                let idVenta = String(item.idventa || item.codventa || item.codigo || item.idproducto || '');
+                let precio = Number(item.precio || item.price || 0);
+                let qty = Number(item.qty || item.cantidad || 1);
 
-                        if (!idVenta || !lugarStr) continue;
+                // Si hay una columna extra (PapaParse), podría ser el ID de venta desplazado
+                const extra = (rawItem as any)['__parsed_extra'];
+                if (extra && extra.length === 1) {
+                    idVenta = String(rawItem['precio'] || rawItem['price']);
+                    precio = Number(extra[0]) || 0;
+                }
 
-                        const fromLocation = locations.find(l => 
-                            l.name.toLowerCase() === lugarStr.toLowerCase() ||
-                            l.id.toLowerCase() === lugarStr.toLowerCase()
-                        );
+                if (!idVenta || !lugarStr) continue;
 
-                        if (!fromLocation) {
-                            errors.push(`Error: La ubicación '${lugarStr}' no existe.`);
-                            continue;
-                        }
-                        
-                        let timestamp = new Date().toISOString();
-                        if (fechaStr) {
-                            const parts = (String(fechaStr).includes('-') ? String(fechaStr).split('-') : String(fechaStr).split('/')).map(p => p.trim());
-                            if (parts.length === 3) {
-                                const day = parseInt(parts[0], 10);
-                                const month = parseInt(parts[1], 10) - 1;
-                                let year = parseInt(parts[2], 10);
-                                if (year < 100) year += 2000;
-                                timestamp = new Date(year, month, day).toISOString();
-                            }
-                        }
+                const fromLocation = locations.find(l => 
+                    l.name.toLowerCase().trim() === lugarStr.toLowerCase().trim() ||
+                    l.id.toLowerCase().trim() === lugarStr.toLowerCase().trim()
+                );
 
-                        movementsToBatch.push({
-                            productId: idVenta,
-                            quantity: qty,
-                            type: MovementType.SALE,
-                            fromLocationId: fromLocation.id,
-                            timestamp: timestamp,
-                            price: precio,
-                            cost: products.find(p => p.id_venta === idVenta)?.cost,
-                            relatedFile: file.name
-                        });
-
-                        stockAdjustments.push({ productId: idVenta, locationId: fromLocation.id, quantityChange: -qty });
-                    }
-
-                    if (movementsToBatch.length === 0) {
-                        if (errors.length > 0) {
-                            addToast(`No se procesó ninguna venta. Errores:\n${errors.slice(0, 3).join('\n')}`, 'error');
-                        } else {
-                            addToast('No se encontraron ventas válidas.', 'warning');
-                        }
-                        return;
-                    }
-
-                    try {
-                        await addBulkMovements(movementsToBatch, stockAdjustments);
-                        if (errors.length > 0) {
-                            addToast(`Ventas procesadas con errores:\n${errors.slice(0, 3).join('\n')}`, 'warning');
-                        } else {
-                            addToast(`Ventas desde '${file.name}' procesadas exitosamente (${movementsToBatch.length} registros).`, 'success');
-                        }
-                    } catch (err) {
-                        addToast('Error al procesar el lote de ventas.', 'error');
+                if (!fromLocation) {
+                    const available = locations.slice(0, 10).map(l => `${l.id} (${l.name})`).join(', ');
+                    errors.push(`Error: El lugar "${lugarStr}" no existe. Disponibles: ${available}...`);
+                    continue;
+                }
+                
+                let timestamp = new Date().toISOString();
+                if (fechaStr) {
+                    const parts = (String(fechaStr).includes('-') ? String(fechaStr).split('-') : String(fechaStr).split('/')).map(p => p.trim());
+                    if (parts.length === 3) {
+                        const day = parseInt(parts[0], 10);
+                        const month = parseInt(parts[1], 10) - 1;
+                        let year = parseInt(parts[2], 10);
+                        if (year < 100) year += 2000;
+                        timestamp = new Date(year, month, day).toISOString();
                     }
                 }
-            });
+
+                movementsToBatch.push({
+                    productId: idVenta,
+                    quantity: qty,
+                    type: MovementType.SALE,
+                    fromLocationId: fromLocation.id,
+                    timestamp: timestamp,
+                    price: precio,
+                    cost: products.find(p => p.id_venta === idVenta)?.cost,
+                    relatedFile: file.name
+                });
+
+                stockAdjustments.push({ productId: idVenta, locationId: fromLocation.id, quantityChange: -qty });
+            }
+
+            if (movementsToBatch.length === 0) {
+                if (errors.length > 0) {
+                    addToast(`No se procesó ninguna venta. Errores:\n${errors.slice(0, 3).join('\n')}`, 'error');
+                } else {
+                    addToast('No se encontraron ventas válidas.', 'warning');
+                }
+                return;
+            }
+
+            try {
+                await addBulkMovements(movementsToBatch, stockAdjustments);
+                if (errors.length > 0) {
+                    addToast(`Ventas procesadas con errores:\n${errors.slice(0, 3).join('\n')}`, 'warning');
+                } else {
+                    addToast(`Ventas desde '${file.name}' procesadas exitosamente (${movementsToBatch.length} registros).`, 'success');
+                }
+            } catch (err) {
+                addToast('Error al procesar el lote de ventas.', 'error');
+            }
+        };
+
+        try {
+            if (file.name.endsWith('.xlsx')) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    await processData(jsonData);
+                };
+                reader.readAsArrayBuffer(file);
+            } else {
+                Papa.parse(content, {
+                    header: true,
+                    skipEmptyLines: true,
+                    delimiter: "", // Auto detect
+                    complete: async (results) => {
+                        await processData(results.data);
+                    }
+                });
+            }
         } catch (error: any) {
              addToast(`Error procesando ventas: ${error.message}`, 'error');
         }

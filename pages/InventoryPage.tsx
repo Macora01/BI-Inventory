@@ -1,6 +1,6 @@
 /**
  * InventoryPage.tsx
- * Version: 1.2.002
+ * Version: 1.2.004
  */
 import React, { useState, useMemo } from 'react';
 import Card from '../components/Card';
@@ -493,31 +493,44 @@ const InventoryPage: React.FC = () => {
             const errors: string[] = [];
             const movementsToBatch: any[] = [];
             const stockAdjustments: any[] = [];
+
+            // Helper para normalizar llaves de objetos (Excel/CSV)
+            const normalizeItem = (raw: any) => {
+                const norm: any = {};
+                for (const k in raw) {
+                    const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
+                    norm[nk] = raw[k];
+                }
+                return norm;
+            };
             
-            for (const item of data) {
-                const prodId = String(item.id_venta || item.codigo || item.id_producto || '');
+            for (const rawItem of data) {
+                const item = normalizeItem(rawItem);
+                const prodId = String(item.idventa || item.codigo || item.idproducto || item.id_venta || '');
                 const qty = Number(item.qty || item.cantidad || 0);
                 if (!prodId || qty <= 0) continue;
                 
                 // Validar existencia de ubicaciones
-                const fromLocName = String(item.sitio_inicial || item.origen || item.inicial || '');
-                const toLocName = String(item.sitio_final || item.destino || item.final || '');
+                const fromLocName = String(item.sitioinicial || item.origen || item.inicial || item.sitio_inicial || '');
+                const toLocName = String(item.sitiofinal || item.destino || item.final || item.sitio_final || '');
 
                 const fromLoc = locations.find(l => 
-                    l.name.toLowerCase() === fromLocName.toLowerCase() ||
-                    l.id.toLowerCase() === fromLocName.toLowerCase()
+                    l.name.toLowerCase().trim() === fromLocName.toLowerCase().trim() ||
+                    l.id.toLowerCase().trim() === fromLocName.toLowerCase().trim()
                 );
                 const toLoc = locations.find(l => 
-                    l.name.toLowerCase() === toLocName.toLowerCase() ||
-                    l.id.toLowerCase() === toLocName.toLowerCase()
+                    l.name.toLowerCase().trim() === toLocName.toLowerCase().trim() ||
+                    l.id.toLowerCase().trim() === toLocName.toLowerCase().trim()
                 );
                 
                 if (!fromLoc) {
-                    errors.push(`Error: El sitio inicial "${fromLocName}" no existe.`);
+                    const available = locations.slice(0, 10).map(l => `${l.id} (${l.name})`).join(', ');
+                    errors.push(`Error: El sitio inicial "${fromLocName}" no existe. Disponibles: ${available}...`);
                     continue;
                 }
                 if (!toLoc) {
-                    errors.push(`Error: El sitio final "${toLocName}" no existe.`);
+                    const available = locations.slice(0, 10).map(l => `${l.id} (${l.name})`).join(', ');
+                    errors.push(`Error: El sitio final "${toLocName}" no existe. Disponibles: ${available}...`);
                     continue;
                 }
                 
@@ -601,14 +614,25 @@ const InventoryPage: React.FC = () => {
             const errors: string[] = [];
             const movementsToBatch: any[] = [];
             const stockAdjustments: any[] = [];
+
+            // Helper para normalizar llaves
+            const normalizeItem = (raw: any) => {
+                const norm: any = {};
+                for (const k in raw) {
+                    const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
+                    norm[nk] = raw[k];
+                }
+                return norm;
+            };
             
-            for (const item of data) {
+            for (const rawItem of data) {
+                const item = normalizeItem(rawItem);
                 // Mapeo de columnas según el nuevo formato: fecha(DD-MM-AAA); lugar; id_venta; precio
-                const fechaStr = String((item as any)['fecha'] || (item as any)['fecha(DD-MM-AAA)'] || (item as any)['timestamp'] || '');
-                const lugarStr = String((item as any)['lugar'] || (item as any)['tienda'] || '');
-                let idVenta = String((item as any)['id_venta'] || (item as any)['cod_venta'] || (item as any)['codigo'] || (item as any)['id_producto'] || '');
-                let precio = Number((item as any)['precio']) || 0;
-                let qty = Number((item as any)['qty'] || (item as any)['cantidad'] || 1);
+                const fechaStr = String(item.fecha || item['fecha(dd-mm-aaa)'] || item.timestamp || '');
+                const lugarStr = String(item.lugar || item.tienda || '');
+                let idVenta = String(item.idventa || item.codventa || item.codigo || item.idproducto || '');
+                let precio = Number(item.precio || item.price || 0);
+                let qty = Number(item.qty || item.cantidad || 1);
 
                 // Si hay una columna extra, es probable que el formato sea: fecha;lugar;id_transaccion;id_venta;precio
                 const extra = (item as any)['__parsed_extra'];
@@ -624,7 +648,8 @@ const InventoryPage: React.FC = () => {
                     l.id.toLowerCase() === lugarStr.toLowerCase()
                 );
                 if (!loc) {
-                    errors.push(`Error: El lugar "${lugarStr}" no existe.`);
+                    const available = locations.slice(0, 10).map(l => `${l.id} (${l.name})`).join(', ');
+                    errors.push(`Error: El lugar "${lugarStr}" no existe. Disponibles: ${available}...`);
                     continue;
                 }
                 
