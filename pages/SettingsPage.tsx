@@ -10,6 +10,28 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.012",
+        date: "2026-04-20",
+        title: "Resúmenes & Columnas",
+        changes: [
+            "Reordenamiento de Grid: BOCENT ahora es siempre la primera columna de ubicación.",
+            "Posición de Ventas: La columna de Ventas se ha movido al final para una mejor lectura del flujo.",
+            "Totales en Encabezados: Se muestra la suma total de prendas debajo de cada nombre de bodega/almacen y en los totales generales.",
+            "Optimización de Cuadratura: La columna Total (Stock + Ventas) ahora incluye su propio resumen global en el encabezado."
+        ]
+    },
+    {
+        version: "1.2.011",
+        date: "2026-04-20",
+        title: "Sincronización & Flexibilidad",
+        changes: [
+            "Ventas Flexibles: Se permite procesar ventas incluso si el sistema reporta stock 0 (ideal para cargas en desorden).",
+            "Sincronización de Procesos: Unificada la lógica de importación entre la página de Inventario y Movimientos.",
+            "Corrección de Stock Local: Reparado error que impedía ver cambios negativos (ventas) en tiempo real si no había registro previo.",
+            "Normalización de IDs: Truncado inteligente de espacios en códigos de venta para evitar fallos de coincidencia."
+        ]
+    },
+    {
         version: "1.2.010",
         date: "2026-04-20",
         title: "Ventas & Cuadratura",

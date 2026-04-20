@@ -1,6 +1,6 @@
 /**
  * MovementsPage.tsx
- * Version: 1.2.010
+ * Version: 1.2.012
  */
 import React, { useCallback } from 'react';
 import Card from '../components/Card';
@@ -342,14 +342,14 @@ const MovementsPage: React.FC = () => {
                 const fechaStr = String(item.fecha || item['fecha(dd-mm-aaa)'] || item.timestamp || '');
                 const lugarStrRaw = String(item.lugar || item.tienda || '');
                 
-                let idVenta = String(item.idventa || item.codventa || item.codigo || item.idproducto || '');
+                let idVenta = String(item.idventa || item.codventa || item.codigo || item.idproducto || '').trim();
                 let precio = Number(item.precio || item.price || 0);
                 let qty = Number(item.qty || item.cantidad || 1);
 
                 // Si hay una columna extra (PapaParse), podría ser el ID de venta desplazado
                 const extra = (rawItem as any)['__parsed_extra'];
                 if (extra && extra.length === 1) {
-                    idVenta = String(rawItem['precio'] || rawItem['price']);
+                    idVenta = String(rawItem['precio'] || rawItem['price'] || '').trim();
                     precio = Number(extra[0]) || 0;
                 }
 
@@ -364,18 +364,6 @@ const MovementsPage: React.FC = () => {
                 }
 
                 const product = products.find(p => p.id_venta === idVenta);
-                if (product) {
-                    const currentStock = getStock(idVenta, fromLocation.id);
-                    if (currentStock < qty) {
-                        const key = `Stock insuficiente p/ "${idVenta}" en "${fromLocation.name}"`;
-                        errorStats[key] = (errorStats[key] || 0) + 1;
-                        continue;
-                    }
-                } else {
-                    const key = `Producto "${idVenta}" no encontrado`;
-                    errorStats[key] = (errorStats[key] || 0) + 1;
-                    continue;
-                }
                 
                 let timestamp = new Date().toISOString();
                 if (fechaStr) {
@@ -396,7 +384,7 @@ const MovementsPage: React.FC = () => {
                     fromLocationId: fromLocation.id,
                     timestamp: timestamp,
                     price: precio,
-                    cost: product.cost,
+                    cost: product?.cost || 0,
                     relatedFile: file.name
                 });
 
@@ -406,9 +394,9 @@ const MovementsPage: React.FC = () => {
             if (movementsToBatch.length === 0) {
                 const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
                 if (errorSummary) {
-                    addToast(`No se procesó ninguna venta. Resumen de errores:\n${errorSummary}\n\nUbicaciones recomendadas: ${locations.slice(0, 10).map(l => l.name).join(', ')}`, 'error');
+                    addToast(`No se procesó ninguna venta. Resumen de errores:\n${errorSummary}\n\nUbicaciones reconocidas en el sistema: ${locations.map(l => l.name).join(', ')}`, 'error');
                 } else {
-                    addToast('No se encontraron ventas válidas.', 'warning');
+                    addToast('No se encontraron ventas válidas en el archivo seleccionado.', 'warning');
                 }
                 return;
             }

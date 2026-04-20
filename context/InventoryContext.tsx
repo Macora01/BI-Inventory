@@ -153,7 +153,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
                     const idx = newStock.findIndex(s => s.productId === sa.productId && s.locationId === sa.locationId);
                     if (idx > -1) {
                         newStock[idx] = { ...newStock[idx], quantity: Number(newStock[idx].quantity) + sa.quantityChange };
-                    } else if (sa.quantityChange > 0) {
+                    } else {
                         newStock.push({ productId: sa.productId, locationId: sa.locationId, quantity: sa.quantityChange });
                     }
                 }

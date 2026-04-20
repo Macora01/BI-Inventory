@@ -340,7 +340,7 @@ async function startServer() {
                 const idx = stockData.findIndex((s: any) => s.productId === sa.productId && s.locationId === sa.locationId);
                 if (idx > -1) {
                     stockData[idx].quantity = Number(stockData[idx].quantity) + Number(sa.quantityChange);
-                } else if (sa.quantityChange > 0) {
+                } else {
                     stockData.push({ productId: sa.productId, locationId: sa.locationId, quantity: sa.quantityChange });
                 }
             }

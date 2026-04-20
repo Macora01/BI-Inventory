@@ -1,6 +1,6 @@
 /**
  * InventoryPage.tsx
- * Version: 1.2.010
+ * Version: 1.2.012
  */
 import React, { useState, useMemo } from 'react';
 import Card from '../components/Card';
@@ -129,11 +129,40 @@ const InventoryPage: React.FC = () => {
     }, [movements]);
 
     // Filtrar ubicaciones que no tienen stock en ningún producto (para simplificar la tabla)
+    // Y ordenar para que BOCENT aparezca primero
     const activeLocations = useMemo(() => {
-        return locations.filter(loc => 
+        const filtered = locations.filter(loc => 
             stock.some(s => s.locationId === loc.id && Number(s.quantity) !== 0)
         );
+        
+        return [...filtered].sort((a, b) => {
+            const idA = a.id.toUpperCase();
+            const idB = b.id.toUpperCase();
+            if (idA === 'BODCENT' || idA === 'BODCEN') return -1;
+            if (idB === 'BODCENT' || idB === 'BODCEN') return 1;
+            return a.name.localeCompare(b.name);
+        });
     }, [locations, stock]);
+
+    // Calcular totales por ubicación para el encabezado
+    const locationTotals = useMemo(() => {
+        const map: Record<string, number> = {};
+        stock.forEach(s => {
+            map[s.locationId] = (map[s.locationId] || 0) + Number(s.quantity);
+        });
+        return map;
+    }, [stock]);
+
+    // Total general de ventas
+    const globalSalesTotal = useMemo(() => {
+        return Object.values(salesByProduct).reduce((sum: number, val: number) => sum + val, 0);
+    }, [salesByProduct]);
+
+    // Total general (Stock + Ventas)
+    const globalGrandTotal = useMemo(() => {
+        const totalStock = Object.values(locationTotals).reduce((sum: number, val: number) => sum + val, 0);
+        return totalStock + globalSalesTotal;
+    }, [locationTotals, globalSalesTotal]);
 
     // useMemo para filtrar productos solo cuando la lista de productos o el término de búsqueda cambian.
     const filteredProducts = useMemo(() => {
@@ -825,10 +854,31 @@ const InventoryPage: React.FC = () => {
                                 <th scope="col" className="px-4 py-3">Código Venta / Fábrica</th>
                                 <th scope="col" className="px-4 py-3">Descripción</th>
                                 {activeLocations.map(loc => (
-                                    <th key={loc.id} scope="col" className="px-4 py-3 text-center">{loc.name}</th>
+                                    <th key={loc.id} scope="col" className="px-4 py-3 text-center">
+                                        <div className="flex flex-col items-center">
+                                            <span>{loc.name}</span>
+                                            <span className="text-[10px] font-black text-secondary bg-secondary/10 px-2 py-0.5 rounded-full mt-1 border border-secondary/20">
+                                                {locationTotals[loc.id] || 0}
+                                            </span>
+                                        </div>
+                                    </th>
                                 ))}
-                                <th scope="col" className="px-4 py-3 text-center">Ventas</th>
-                                <th scope="col" className="px-4 py-3 text-center">Total</th>
+                                <th scope="col" className="px-4 py-3 text-center">
+                                    <div className="flex flex-col items-center">
+                                        <span>Total</span>
+                                        <span className="text-[10px] font-black text-primary bg-primary/10 px-2 py-0.5 rounded-full mt-1 border border-primary/20">
+                                            {globalGrandTotal}
+                                        </span>
+                                    </div>
+                                </th>
+                                <th scope="col" className="px-4 py-3 text-center">
+                                    <div className="flex flex-col items-center">
+                                        <span>Ventas</span>
+                                        <span className="text-[10px] font-black text-danger bg-danger/10 px-2 py-0.5 rounded-full mt-1 border border-danger/20">
+                                            {globalSalesTotal}
+                                        </span>
+                                    </div>
+                                </th>
                                 <th scope="col" className="px-4 py-3 text-center">
                                     <div className="flex items-center justify-center">
                                         Mín. <Edit size={12} className="ml-1 opacity-50" />
@@ -936,14 +986,14 @@ const InventoryPage: React.FC = () => {
                                                 </td>
                                             );
                                         })}
-                                        <td className="px-4 py-4 text-center font-medium text-secondary bg-secondary/5">
-                                            {salesByProduct[product.id_venta] || 0}
-                                        </td>
                                         <td className={`px-4 py-4 text-center font-black transition-colors ${
                                             totalStock < (product.minStock ?? 2) ? 'bg-red-100 text-red-900 border-red-200' : 
                                             'bg-accent/30 text-primary border-accent/20'
                                         }`}>
                                             {totalStock + (salesByProduct[product.id_venta] || 0)}
+                                        </td>
+                                        <td className="px-4 py-4 text-center font-medium text-secondary bg-secondary/5">
+                                            {salesByProduct[product.id_venta] || 0}
                                         </td>
                                         <td 
                                             className="px-4 py-4 text-center cursor-pointer hover:bg-accent/10 transition-colors"
