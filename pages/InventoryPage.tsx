@@ -1,6 +1,6 @@
 /**
  * InventoryPage.tsx
- * Version: 1.2.014
+ * Version: 1.2.015
  */
 import React, { useState, useMemo } from 'react';
 import Card from '../components/Card';
@@ -39,6 +39,7 @@ const InventoryPage: React.FC = () => {
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [isAdjustmentModalOpen, setIsAdjustmentModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isBulkImageModalOpen, setIsBulkImageModalOpen] = useState(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [transferData, setTransferData] = useState({
         productId: '',
@@ -848,6 +849,9 @@ const InventoryPage: React.FC = () => {
             <div className="flex justify-between items-center">
                 <h2 className="text-3xl font-bold text-primary">Gestión de Productos e Inventario</h2>
                 <div className="flex space-x-2">
+                    <Button onClick={() => setIsBulkImageModalOpen(true)} variant="secondary" className="flex items-center">
+                        <Upload size={18} className="mr-2" /> Fotos Masivas
+                    </Button>
                     <Button onClick={() => setIsImportModalOpen(true)} variant="secondary" className="flex items-center">
                         <Upload size={18} className="mr-2" /> Importar CSV
                     </Button>
@@ -1485,6 +1489,26 @@ const InventoryPage: React.FC = () => {
                         <Button type="submit">Confirmar Ajuste</Button>
                     </div>
                 </form>
+            </Modal>
+
+            {/* Modal de Carga Masiva de Imágenes */}
+            <Modal
+                isOpen={isBulkImageModalOpen}
+                onClose={() => setIsBulkImageModalOpen(false)}
+                title="Carga Masiva de Fotografías"
+            >
+                <div className="space-y-4">
+                    <p className="text-sm text-text-light italic">
+                        Selecciona múltiples archivos. El sistema los asociará automáticamente a los productos usando el <strong>Código de Fábrica</strong> (ej: 7089.jpeg se asignará al producto con código de fábrica 7089).
+                    </p>
+                    <BulkImageUpload 
+                        onSuccess={() => {
+                            setIsBulkImageModalOpen(false);
+                            setImageRefreshKey(Date.now());
+                            fetchData();
+                        }} 
+                    />
+                </div>
             </Modal>
 
             {/* Modal de Importación (CSV / XLSX) */}

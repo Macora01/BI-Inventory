@@ -49,6 +49,8 @@ interface InventoryContextType {
     fetchData: () => Promise<void>;
     checkHealth: () => Promise<void>;
     fetchLogo: () => Promise<void>;
+    uploadProductImage: (factoryId: string, file: File) => Promise<boolean>;
+    bulkUploadImages: (files: FileList) => Promise<{ success: number; failed: number }>;
     returnAllToWarehouse: (locationId: string) => Promise<void>;
     addBulkMovements: (movements: (Omit<Movement, 'id' | 'timestamp'> & { timestamp?: Date | string })[], stockAdjustments: { productId: string, locationId: string, quantityChange: number }[]) => Promise<void>;
     
@@ -109,6 +111,45 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
     const logout = useCallback(() => {
         setCurrentUser(null);
         localStorage.removeItem('inventory_user');
+    }, []);
+
+    const uploadProductImage = useCallback(async (factoryId: string, file: File) => {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const res = await fetch(`/api/upload?type=product&factoryId=${factoryId}`, {
+                method: 'POST',
+                body: formData
+            });
+            return res.ok;
+        } catch (err) {
+            console.error('Error uploading product image:', err);
+            return false;
+        }
+    }, []);
+
+    const bulkUploadImages = useCallback(async (files: FileList) => {
+        try {
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+            
+            const res = await fetch('/api/products/images/bulk', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (res.ok) {
+                const data = await res.json();
+                return data.stats;
+            }
+            throw new Error('Bulk upload failed');
+        } catch (err) {
+            console.error('Error uploading images bulk:', err);
+            throw err;
+        }
     }, []);
 
     const fetchLogo = useCallback(async () => {
@@ -545,6 +586,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             addLocation, updateLocation, deleteLocation,
             addUser, updateUser, deleteUser,
             loading, error, dbStatus, logo, fetchData, checkHealth, fetchLogo, addBulkMovements,
+            uploadProductImage, bulkUploadImages,
             returnAllToWarehouse,
             currentUser, isAuthenticated: !!currentUser, login, logout
         }}>

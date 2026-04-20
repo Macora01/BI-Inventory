@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.015",
+        date: "2026-04-20",
+        title: "Gestión Multimedia",
+        changes: [
+            "Carga Masiva de Fotos: Nueva opción para subir múltiples fotos simultáneamente vinculadas por Código de Fábrica.",
+            "Fotos Individuales: Integrada la subida de foto directamente en el formulario de creación/edición de producto.",
+            "Compatibilidad Ampliada: Soporte para formatos .jpg, .jpeg, .png y .webp con detección automática.",
+            "Optimización de Servidor: Nuevo motor de procesamiento de imágenes masivo para mayor velocidad."
+        ]
+    },
+    {
         version: "1.2.014",
         date: "2026-04-20",
         title: "Reparación de Base de Datos",

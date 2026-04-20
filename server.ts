@@ -439,13 +439,49 @@ async function startServer() {
     // Product Images
     app.get('/api/products/:factoryId/image', async (req, res) => {
         const { factoryId } = req.params;
-        const imgPath = path.join(productsDir, `${factoryId}.jpg`);
-        try {
-            await fs.access(imgPath);
-            res.sendFile(imgPath);
-        } catch {
-            res.status(404).send('Image not found');
+        const extensions = ['.jpg', '.jpeg', '.png', '.webp'];
+        
+        for (const ext of extensions) {
+            const imgPath = path.join(productsDir, `${factoryId}${ext}`);
+            try {
+                await fs.access(imgPath);
+                return res.sendFile(imgPath);
+            } catch {
+                continue;
+            }
         }
+        res.status(404).send('Image not found');
+    });
+
+    // Bulk Image Upload
+    app.post('/api/products/images/bulk', upload.array('files', 100), async (req, res) => {
+        const files = req.files as Express.Multer.File[];
+        if (!files || files.length === 0) {
+            return res.status(400).json({ error: 'No files uploaded' });
+        }
+
+        const stats = { success: 0, failed: 0 };
+
+        for (const file of files) {
+            try {
+                const originalName = file.originalname;
+                const factoryId = path.parse(originalName).name.trim();
+                const ext = path.parse(originalName).ext.toLowerCase();
+                
+                // Si el archivo ya está en productsDir (gracias a multer si se pasó factoryId), perfecto.
+                // Si no, lo movemos/renombramos si es necesario.
+                // Pero como usamos diskStorage genérico, multer lo guardó en uploadsDir por defecto si no hay query.
+                
+                const targetPath = path.join(productsDir, `${factoryId}${ext}`);
+                await fs.rename(file.path, targetPath);
+                stats.success++;
+            } catch (err) {
+                console.error('Error processing bulk file:', err);
+                stats.failed++;
+            }
+        }
+
+        res.json({ success: true, stats });
     });
 
     // --- GENERIC API IMPLEMENTATION ---
