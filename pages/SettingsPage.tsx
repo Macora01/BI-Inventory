@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.016",
+        date: "2026-04-20",
+        title: "Resumen Financiero",
+        changes: [
+            "Dashboard: La tarjeta de ventas ahora muestra el monto total en CLP.",
+            "IVA: Se agregó el cálculo automático y visualización del monto Neto (sin IVA) entre paréntesis.",
+            "Métricas Detalladas: Se incluyó el conteo de unidades vendidas como información complementaria en la misma tarjeta."
+        ]
+    },
+    {
         version: "1.2.015",
         date: "2026-04-20",
         title: "Gestión Multimedia",

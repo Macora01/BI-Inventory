@@ -45,6 +45,15 @@ const DashboardPage: React.FC = () => {
             .filter(m => m.type === 'SALE')
             .reduce((sum, m) => sum + Number(m.quantity), 0);
     }, [movements]);
+
+    const totalSalesAmount = useMemo(() => {
+        if (!Array.isArray(movements)) return 0;
+        return movements
+            .filter(m => m.type === 'SALE')
+            .reduce((sum, m) => sum + (Number(m.price) || 0) * Number(m.quantity), 0);
+    }, [movements]);
+
+    const netSalesAmount = totalSalesAmount / IVA_CHILE;
     
     const lowStockItems = useMemo(() => {
         if (!Array.isArray(stock) || !Array.isArray(products)) return 0;
@@ -148,7 +157,14 @@ const DashboardPage: React.FC = () => {
                 <StatCard icon={Activity} title="Salud Inventario" value={`${healthScore}%`} variant={healthScore > 80 ? 'success' : 'warning'} />
                 <StatCard icon={AlertTriangle} title="Items Bajo Stock" value={lowStockItems.toLocaleString('es-CL')} variant="danger" />
                 <StatCard icon={Package} title="Total Unidades" value={totalUnits.toLocaleString('es-CL')} />
-                <StatCard icon={ShoppingCart} title="Total Ventas" value={totalSoldUnits.toLocaleString('es-CL')} variant="success" />
+                <StatCard 
+                    icon={ShoppingCart} 
+                    title="Total Ventas" 
+                    value={`$${totalSalesAmount.toLocaleString('es-CL')}`} 
+                    subValue={`($${Math.round(netSalesAmount).toLocaleString('es-CL')})`}
+                    description={`${totalSoldUnits.toLocaleString('es-CL')} unidades`}
+                    variant="success" 
+                />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -222,14 +238,25 @@ const DashboardPage: React.FC = () => {
     );
 };
 
-const StatCard: React.FC<{ icon: any, title: string, value: string, variant?: string }> = ({ icon: Icon, title, value, variant }) => (
+const StatCard: React.FC<{ 
+    icon: any, 
+    title: string, 
+    value: string, 
+    subValue?: string,
+    description?: string,
+    variant?: string 
+}> = ({ icon: Icon, title, value, subValue, description, variant }) => (
     <Card className="flex items-center">
         <div className="p-3 rounded-full bg-accent mr-4">
             <Icon size={24} className={variant === 'success' ? 'text-success' : variant === 'danger' ? 'text-danger' : 'text-primary'} />
         </div>
-        <div>
+        <div className="flex-1">
             <p className="text-xs text-text-light uppercase font-bold tracking-wider">{title}</p>
-            <p className="text-2xl font-bold text-text-main">{value}</p>
+            <div className="flex items-baseline space-x-2">
+                <p className="text-2xl font-bold text-text-main">{value}</p>
+                {subValue && <p className="text-sm font-medium text-text-light">{subValue}</p>}
+            </div>
+            {description && <p className="text-[10px] text-text-light mt-0.5 italic">{description}</p>}
         </div>
     </Card>
 );
