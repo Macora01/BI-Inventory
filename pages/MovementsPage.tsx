@@ -1,6 +1,6 @@
 /**
  * MovementsPage.tsx
- * Version: 1.2.012
+ * Version: 1.2.013
  */
 import React, { useCallback } from 'react';
 import Card from '../components/Card';
@@ -322,7 +322,9 @@ const MovementsPage: React.FC = () => {
     }, [addBulkMovements, locations, addToast, getStock]);
 
     const processSales = useCallback(async (content: string, file: File) => {
+        console.log(`[DEBUG] Iniciando procesamiento de ventas: ${file.name}`);
         const processData = async (data: any[]) => {
+            console.log(`[DEBUG] Filas leídas: ${data.length}`);
             const errorStats: Record<string, number> = {};
             const movementsToBatch: any[] = [];
             const stockAdjustments: any[] = [];
@@ -337,8 +339,15 @@ const MovementsPage: React.FC = () => {
                 return norm;
             };
 
-            for (const rawItem of data) {
+            for (const [index, rawItem] of data.entries()) {
                 const item = normalizeItem(rawItem);
+                
+                // Logging de la primera fila para inspeccinar estructura
+                if (index === 0) {
+                    console.log('[DEBUG] Ejemplo de fila normalizada:', item);
+                    console.log('[DEBUG] Llaves originales:', Object.keys(rawItem));
+                }
+
                 const fechaStr = String(item.fecha || item['fecha(dd-mm-aaa)'] || item.timestamp || '');
                 const lugarStrRaw = String(item.lugar || item.tienda || '');
                 
@@ -353,17 +362,26 @@ const MovementsPage: React.FC = () => {
                     precio = Number(extra[0]) || 0;
                 }
 
-                if (!idVenta || !lugarStrRaw) continue;
+                if (!idVenta || !lugarStrRaw) {
+                    if (index < 5) console.warn(`[DEBUG] Fila ${index} saltada: idVenta="${idVenta}", lugar="${lugarStrRaw}"`);
+                    continue;
+                }
 
                 const fromLocation = findLoc(lugarStrRaw);
 
                 if (!fromLocation) {
                     const key = `Lugar "${lugarStrRaw}" no encontrado`;
                     errorStats[key] = (errorStats[key] || 0) + 1;
+                    if (index < 5) console.error(`[DEBUG] Fila ${index}: Ubicación no encontrada para "${lugarStrRaw}"`);
                     continue;
                 }
 
                 const product = products.find(p => p.id_venta === idVenta);
+                if (!product) {
+                    // Si el producto no existe en el sistema local, avisamos pero permitimos si no es estricto
+                    // (En este sistema, necesitamos el producto para el costo)
+                    if (index < 5) console.warn(`[DEBUG] Fila ${index}: Producto "${idVenta}" no encontrado en catálogo local.`);
+                }
                 
                 let timestamp = new Date().toISOString();
                 if (fechaStr) {
@@ -391,7 +409,10 @@ const MovementsPage: React.FC = () => {
                 stockAdjustments.push({ productId: idVenta, locationId: fromLocation.id, quantityChange: -qty });
             }
 
+            console.log(`[DEBUG] Total movimientos preparados: ${movementsToBatch.length}`);
+
             if (movementsToBatch.length === 0) {
+                console.error('[DEBUG] No se generaron movimientos para batch.');
                 const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
                 if (errorSummary) {
                     addToast(`No se procesó ninguna venta. Resumen de errores:\n${errorSummary}\n\nUbicaciones reconocidas en el sistema: ${locations.map(l => l.name).join(', ')}`, 'error');
@@ -401,7 +422,14 @@ const MovementsPage: React.FC = () => {
                 return;
             }
 
-            await addBulkMovements(movementsToBatch, stockAdjustments);
+            try {
+                console.log('[DEBUG] Intentando addBulkMovements...');
+                await addBulkMovements(movementsToBatch, stockAdjustments);
+                console.log('[DEBUG] addBulkMovements completado exitosamente.');
+            } catch (err: any) {
+                console.error('[DEBUG] Error en addBulkMovements:', err);
+                throw err;
+            }
             
             const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
             if (errorSummary) {

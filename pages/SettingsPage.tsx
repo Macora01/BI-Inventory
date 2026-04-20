@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.013",
+        date: "2026-04-20",
+        title: "Sniffer & Orden Inteligente",
+        changes: [
+            "Modo Sniffer: Implementado registro detallado (logs) en consola para rastrear por qué una carga de ventas no genera movimientos.",
+            "Orden de Columnas Pro: BOCENT siempre primero, seguido del resto de almacenes ordenados por volumen de stock (mayor a menor).",
+            "Depuración de Lógica: Unificada y robustecida la limpieza de IDs y nombres en todos los puntos de importación.",
+            "Consistencia de Datos: Verificación adicional de costos de producto durante el registro de ventas masivas."
+        ]
+    },
+    {
         version: "1.2.012",
         date: "2026-04-20",
         title: "Resúmenes & Columnas",

@@ -126,6 +126,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
     }, []);
 
     const addBulkMovements = useCallback(async (movements: (Omit<Movement, 'id' | 'timestamp'> & { timestamp?: Date | string })[], stockAdjustments: { productId: string, locationId: string, quantityChange: number }[]) => {
+        console.log('[DEBUG] addBulkMovements - Payload recibido:', { movementsCount: movements.length, stockAdjCount: stockAdjustments.length });
         const fullMovements = movements.map(m => ({
             ...m,
             id: generateId('mov'),
@@ -133,16 +134,23 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
         }));
 
         try {
+            console.log('[DEBUG] Enviando POST a /api/movements/bulk...');
             const response = await fetch('/api/movements/bulk', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ movements: fullMovements, stockAdjustments })
             });
 
+            console.log('[DEBUG] Respuesta del servidor status:', response.status);
+
             if (!response.ok) {
                 const errorData = await response.json();
+                console.error('[DEBUG] Error retornado por el servidor:', errorData);
                 throw new Error(errorData.error || 'Error en procesamiento masivo');
             }
+
+            const successData = await response.json();
+            console.log('[DEBUG] Servidor procesó batch con éxito:', successData);
 
             // Actualizar localmente para inmediatez
             setMovements(prev => [...fullMovements.map(m => ({ ...m, timestamp: new Date(m.timestamp) })), ...prev]);

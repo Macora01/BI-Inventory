@@ -1,6 +1,6 @@
 /**
  * InventoryPage.tsx
- * Version: 1.2.012
+ * Version: 1.2.013
  */
 import React, { useState, useMemo } from 'react';
 import Card from '../components/Card';
@@ -128,22 +128,6 @@ const InventoryPage: React.FC = () => {
         return map;
     }, [movements]);
 
-    // Filtrar ubicaciones que no tienen stock en ningún producto (para simplificar la tabla)
-    // Y ordenar para que BOCENT aparezca primero
-    const activeLocations = useMemo(() => {
-        const filtered = locations.filter(loc => 
-            stock.some(s => s.locationId === loc.id && Number(s.quantity) !== 0)
-        );
-        
-        return [...filtered].sort((a, b) => {
-            const idA = a.id.toUpperCase();
-            const idB = b.id.toUpperCase();
-            if (idA === 'BODCENT' || idA === 'BODCEN') return -1;
-            if (idB === 'BODCENT' || idB === 'BODCEN') return 1;
-            return a.name.localeCompare(b.name);
-        });
-    }, [locations, stock]);
-
     // Calcular totales por ubicación para el encabezado
     const locationTotals = useMemo(() => {
         const map: Record<string, number> = {};
@@ -152,6 +136,33 @@ const InventoryPage: React.FC = () => {
         });
         return map;
     }, [stock]);
+
+    // Filtrar ubicaciones que no tienen stock en ningún producto (para simplificar la tabla)
+    // Y ordenar para que BOCENT aparezca primero, luego por cantidad total desc
+    const activeLocations = useMemo(() => {
+        const filtered = locations.filter(loc => 
+            stock.some(s => s.locationId === loc.id && Number(s.quantity) !== 0)
+        );
+        
+        const sorted = [...filtered].sort((a, b) => {
+            const idA = a.id.toUpperCase();
+            const idB = b.id.toUpperCase();
+            const isA_BOD = idA === 'BODCENT' || idA === 'BODCEN';
+            const isB_BOD = idB === 'BODCENT' || idB === 'BODCEN';
+
+            if (isA_BOD && !isB_BOD) return -1;
+            if (!isA_BOD && isB_BOD) return 1;
+
+            const totalA = locationTotals[a.id] || 0;
+            const totalB = locationTotals[b.id] || 0;
+            
+            // Si no son bodega central, ordenamos por total mayor a menor
+            return totalB - totalA;
+        });
+
+        console.log('[DEBUG] Ubicaciones activas y ordenadas:', sorted.map(l => ({ name: l.name, total: locationTotals[l.id] })));
+        return sorted;
+    }, [locations, stock, locationTotals]);
 
     // Total general de ventas
     const globalSalesTotal = useMemo(() => {
@@ -685,7 +696,9 @@ const InventoryPage: React.FC = () => {
     };
 
     const processSales = async (content: string, file?: File) => {
+        console.log(`[DEBUG] processSales en InventoryPage - Archivo: ${file?.name || 'CSV directo'}`);
         const processData = async (data: any[]) => {
+            console.log(`[DEBUG] Filas detectadas: ${data.length}`);
             const errorStats: Record<string, number> = {};
             const movementsToBatch: any[] = [];
             const stockAdjustments: any[] = [];
@@ -700,27 +713,36 @@ const InventoryPage: React.FC = () => {
                 return norm;
             };
             
-            for (const rawItem of data) {
+            for (const [index, rawItem] of data.entries()) {
                 const item = normalizeItem(rawItem);
+                
+                if (index === 0) {
+                    console.log('[DEBUG] Primera fila normalizada:', item);
+                }
+
                 const fechaStr = String(item.fecha || item['fecha(dd-mm-aaa)'] || item.timestamp || '');
                 const lugarStrRaw = String(item.lugar || item.tienda || '');
                 
-                let idVenta = String(item.idventa || item.codventa || item.codigo || item.idproducto || '');
+                let idVenta = String(item.idventa || item.codventa || item.codigo || item.idproducto || '').trim();
                 let precio = Number(item.precio || item.price || 0);
                 let qty = Number(item.qty || item.cantidad || 1);
 
                 const extra = (item as any)['__parsed_extra'];
                 if (extra && extra.length === 1) {
-                    idVenta = String((item as any)['precio']);
+                    idVenta = String((item as any)['precio']).trim();
                     precio = Number(extra[0]) || 0;
                 }
 
-                if (!idVenta || !lugarStrRaw) continue;
+                if (!idVenta || !lugarStrRaw) {
+                    if (index < 5) console.warn('[DEBUG] Fila incompleta:', { index, idVenta, lugarStrRaw });
+                    continue;
+                }
                 
                 const loc = findLoc(lugarStrRaw);
                 if (!loc) {
                     const key = `El lugar "${lugarStrRaw}" no existe.`;
                     errorStats[key] = (errorStats[key] || 0) + 1;
+                    if (index < 5) console.error(`[DEBUG] Ubicación no encontrada: ${lugarStrRaw}`);
                     continue;
                 }
                 
@@ -736,6 +758,8 @@ const InventoryPage: React.FC = () => {
                     }
                 }
 
+                const product = products.find(p => p.id_venta === idVenta);
+
                 movementsToBatch.push({
                     productId: idVenta,
                     quantity: qty,
@@ -743,11 +767,14 @@ const InventoryPage: React.FC = () => {
                     fromLocationId: loc.id,
                     timestamp: timestamp,
                     price: precio,
+                    cost: product?.cost || 0,
                     relatedFile: file ? file.name : 'Venta Masiva'
                 });
 
                 stockAdjustments.push({ productId: idVenta, locationId: loc.id, quantityChange: -qty });
             }
+
+            console.log(`[DEBUG] Registros válidos para procesar: ${movementsToBatch.length}`);
 
             if (movementsToBatch.length === 0) {
                 const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
@@ -760,7 +787,9 @@ const InventoryPage: React.FC = () => {
             }
 
             try {
+                console.log('[DEBUG] Invocando addBulkMovements...');
                 await addBulkMovements(movementsToBatch, stockAdjustments);
+                console.log('[DEBUG] Batch procesado con éxito en el backend.');
                 setIsImportModalOpen(false);
                 const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
                 if (errorSummary) {
@@ -768,8 +797,9 @@ const InventoryPage: React.FC = () => {
                 } else {
                     addToast(`¡Éxito! Se registraron ${movementsToBatch.length} ventas correctamente desde '${file?.name || 'archivo'}'.`, 'success');
                 }
-            } catch (err) {
-                addToast('Error al procesar el lote de ventas.', 'error');
+            } catch (err: any) {
+                console.error('[DEBUG] Error en addBulkMovements:', err);
+                addToast(`Error al procesar el lote de ventas: ${err.message}`, 'error');
             }
         };
 
