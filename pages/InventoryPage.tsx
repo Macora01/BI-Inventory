@@ -1,6 +1,6 @@
 /**
  * InventoryPage.tsx
- * Version: 1.2.013
+ * Version: 1.2.014
  */
 import React, { useState, useMemo } from 'react';
 import Card from '../components/Card';

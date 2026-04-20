@@ -130,6 +130,12 @@ async function initDb() {
                     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='movements' AND column_name='relatedFile') THEN
                         ALTER TABLE movements ADD COLUMN "relatedFile" TEXT;
                     END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='movements' AND column_name='price') THEN
+                        ALTER TABLE movements ADD COLUMN price NUMERIC;
+                    END IF;
+                    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='movements' AND column_name='cost') THEN
+                        ALTER TABLE movements ADD COLUMN cost NUMERIC;
+                    END IF;
                 END $$;
 
                 CREATE TABLE IF NOT EXISTS users (

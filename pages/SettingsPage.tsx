@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.014",
+        date: "2026-04-20",
+        title: "Reparación de Base de Datos",
+        changes: [
+            "Hotfix Crítico: Reparado error en la base de datos que impedía guardar ventas por falta de columnas de precio/costo.",
+            "Estabilidad de Batch: Optimizado el proceso de guardado masivo para evitar fallos de esquema.",
+            "Confirmación de Orden: Reforzada la prioridad de BODCENT y el orden por volumen de stock en la grilla."
+        ]
+    },
+    {
         version: "1.2.013",
         date: "2026-04-20",
         title: "Sniffer & Orden Inteligente",
