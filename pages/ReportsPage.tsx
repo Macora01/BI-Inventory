@@ -196,7 +196,7 @@ const ReportsPage: React.FC = () => {
                 didDrawPage: () => addFooter(doc)
             });
 
-            const totalSales = reportData.reduce((sum, m) => sum + (m.price || 0), 0);
+            const totalSales = reportData.reduce((sum, m) => sum + ((m.price || 0) * (m.quantity || 1)), 0);
             const finalY = (doc as any).lastAutoTable.finalY || 50;
             doc.setFontSize(12);
             doc.setTextColor(0);
@@ -333,7 +333,7 @@ const ReportsPage: React.FC = () => {
                             </h3>
                             <p className="text-sm text-text-light">
                                 {reportType === 'sales' 
-                                    ? `${reportData.length} ventas encontradas. Total: $${reportData.reduce((sum, m) => sum + (m.price || 0), 0).toLocaleString('es-CL')}`
+                                    ? `${reportData.length} transacciones registradas. Total: $${reportData.reduce((sum, m) => sum + ((m.price || 0) * (m.quantity || 1)), 0).toLocaleString('es-CL')}`
                                     : `${inventoryReportData.length} productos con existencia. Total unidades: ${inventoryReportData.reduce((sum, item) => sum + Number(item.quantity), 0).toLocaleString('es-CL')}`
                                 }
                             </p>

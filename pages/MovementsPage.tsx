@@ -1,6 +1,6 @@
 /**
  * MovementsPage.tsx
- * Version: 1.2.018
+ * Version: 1.2.019
  */
 import React, { useCallback } from 'react';
 import Card from '../components/Card';

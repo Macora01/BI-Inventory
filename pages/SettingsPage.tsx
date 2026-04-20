@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.019",
+        date: "2026-04-20",
+        title: "Corrección Precisión de Reportes",
+        changes: [
+            "Reporte de Ventas: Se corrigió el cálculo del valor total de ventas para incluir correctamente la cantidad (Multiplicación Precio x Cantidad).",
+            "Consistencia en Almacenes: Corregida la discrepancia en el total monetario reportado para almacenes específicos como ALMCAS.",
+            "Interfaz de Reportes: Se ajustó el resumen visual para mostrar el monto acumulado correcto."
+        ]
+    },
+    {
         version: "1.2.018",
         date: "2026-04-20",
         title: "Mantenimiento de Catálogo",
