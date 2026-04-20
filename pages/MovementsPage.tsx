@@ -159,7 +159,11 @@ const MovementsPage: React.FC = () => {
             }
 
             if (movementsToBatch.length === 0) {
-                addToast('No se encontraron transferencias válidas.', 'warning');
+                if (errors.length > 0) {
+                    addToast(`No se procesó nada. Errores detectados:\n${errors.slice(0, 5).join('\n')}`, 'error');
+                } else {
+                    addToast('No se encontraron transferencias válidas en el archivo.', 'warning');
+                }
                 return;
             }
 
@@ -240,7 +244,11 @@ const MovementsPage: React.FC = () => {
                     }
 
                     if (movementsToBatch.length === 0) {
-                        addToast('No se encontraron ventas válidas.', 'warning');
+                        if (errors.length > 0) {
+                            addToast(`No se procesó ninguna venta. Errores:\n${errors.slice(0, 3).join('\n')}`, 'error');
+                        } else {
+                            addToast('No se encontraron ventas válidas.', 'warning');
+                        }
                         return;
                     }
 

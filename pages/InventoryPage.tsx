@@ -551,7 +551,11 @@ const InventoryPage: React.FC = () => {
             }
 
             if (movementsToBatch.length === 0) {
-                addToast('No se encontraron movimientos válidos para procesar.', 'warning');
+                if (errors.length > 0) {
+                    addToast(`No se procesó ningún movimiento. Errores:\n${errors.slice(0, 5).join('\n')}`, 'error');
+                } else {
+                    addToast('No se encontraron movimientos válidos para procesar.', 'warning');
+                }
                 return;
             }
 
@@ -650,7 +654,11 @@ const InventoryPage: React.FC = () => {
             }
 
             if (movementsToBatch.length === 0) {
-                addToast('No se encontraron ventas válidas para procesar.', 'warning');
+                if (errors.length > 0) {
+                    addToast(`No se procesó ninguna venta. Errores:\n${errors.slice(0, 3).join('\n')}`, 'error');
+                } else {
+                    addToast('No se encontraron ventas válidas para procesar.', 'warning');
+                }
                 return;
             }
 

@@ -3,23 +3,29 @@ import { ParsedInitialInventory, ParsedSale, ParsedTransfer } from '../types';
 const detectDelimiter = (line: string): string => {
   const commaCount = (line.match(/,/g) || []).length;
   const semicolonCount = (line.match(/;/g) || []).length;
+  const tabCount = (line.match(/\t/g) || []).length;
+  
+  if (tabCount > commaCount && tabCount > semicolonCount) return '\t';
   return semicolonCount > commaCount ? ';' : ',';
 };
 
 export const parseInitialInventoryCSV = (csvContent: string): ParsedInitialInventory[] => {
   const lines = csvContent.trim().split('\n');
-  if (lines.length === 0) return [];
+  if (lines.length <= 1) return [];
   
   const delimiter = detectDelimiter(lines[0]);
   const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase());
   
-  // Soporte para variaciones de cabeceras
   const idVentaIdx = headers.findIndex(h => h.includes('id_venta') || h.includes('id venta') || h.includes('codigo') || h.includes('id_producto'));
   const priceIdx = headers.findIndex(h => h.includes('price') || h.includes('precio') || h.includes('venta'));
   const costIdx = headers.findIndex(h => h.includes('cost') || h.includes('costo'));
   const idFabricaIdx = headers.findIndex(h => h.includes('id_fabrica') || h.includes('id fabrica') || h.includes('fabrica'));
   const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('cantidad') || h.includes('stock'));
   const descIdx = headers.findIndex(h => h.includes('description') || h.includes('descripcion') || h.includes('nombre'));
+
+  if (idVentaIdx === -1 && qtyIdx === -1) {
+    throw new Error('No se encontraron las columnas necesarias (id_venta, qty). Verifique el delimitador o los encabezados.');
+  }
 
   return lines.slice(1).map(line => {
     const values = line.split(delimiter).map(v => v.trim());
@@ -36,7 +42,7 @@ export const parseInitialInventoryCSV = (csvContent: string): ParsedInitialInven
 
 export const parseTransferCSV = (csvContent: string): ParsedTransfer[] => {
     const lines = csvContent.trim().split('\n');
-    if (lines.length === 0) return [];
+    if (lines.length <= 1) return [];
 
     const delimiter = detectDelimiter(lines[0]);
     const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase());
@@ -45,6 +51,10 @@ export const parseTransferCSV = (csvContent: string): ParsedTransfer[] => {
     const sitioFinalIdx = headers.findIndex(h => h.includes('sitio_final') || h.includes('destino') || h.includes('final'));
     const idVentaIdx = headers.findIndex(h => h.includes('id_venta') || h.includes('id venta') || h.includes('codigo') || h.includes('id_venta'));
     const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('cantidad'));
+
+    if (sitioInicIdx === -1 || sitioFinalIdx === -1 || idVentaIdx === -1) {
+        throw new Error('No se encontraron las columnas sitio_inicial, sitio_final o id_venta. Verifique el delimitador.');
+    }
 
     return lines.slice(1).map(line => {
         const values = line.split(delimiter).map(v => v.trim());
