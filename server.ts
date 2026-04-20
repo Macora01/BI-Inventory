@@ -99,6 +99,16 @@ async function initDb() {
                     END IF;
                 END $$;
 
+                CREATE TABLE IF NOT EXISTS settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS factory_images (
+                    factory_id TEXT PRIMARY KEY,
+                    image_data TEXT
+                );
+
                 CREATE TABLE IF NOT EXISTS movements (
                     id TEXT PRIMARY KEY,
                     "productId" TEXT,
@@ -390,6 +400,23 @@ async function startServer() {
     // Logo
     app.get('/api/logo', async (req, res) => {
         try {
+            // Priority: DB
+            const result = await pool.query('SELECT value FROM settings WHERE key = $1', ['logo']);
+            if (result.rows.length > 0) {
+                const base64 = result.rows[0].value;
+                const matches = base64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
+                if (matches) {
+                    const mimeType = matches[1];
+                    const content = matches[2];
+                    const img = Buffer.from(content, 'base64');
+                    res.writeHead(200, {
+                        'Content-Type': mimeType,
+                        'Content-Length': img.length
+                    });
+                    return res.end(img);
+                }
+            }
+
             const logoPath = path.join(uploadsDir, 'logo.png');
             await fs.access(logoPath);
             res.sendFile(logoPath);
@@ -407,7 +434,13 @@ async function startServer() {
     // Endpoint para obtener la configuración del logo (usado por el frontend)
     app.get('/api/settings/logo', async (req, res) => {
         try {
-            // Primero verificamos si existe en uploads o public
+            // Primero verificamos en DB
+            const result = await pool.query('SELECT value FROM settings WHERE key = $1', ['logo']);
+            if (result.rows.length > 0) {
+                return res.json({ logo: '/api/logo' });
+            }
+
+            // Fallback a archivos
             const uploadsLogo = path.join(uploadsDir, 'logo.png');
             const publicLogo = path.join(process.cwd(), 'public', 'logo.png');
             
@@ -432,13 +465,56 @@ async function startServer() {
     app.use('/uploads/products', express.static(productsDir));
 
     // Upload Logo/Images
-    app.post('/api/upload', upload.single('file'), (req, res) => {
-        res.json({ success: true, file: req.file });
+    app.post('/api/upload', upload.single('file'), async (req, res) => {
+        if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+        
+        const type = req.query.type;
+        const factoryId = req.query.factoryId as string;
+        
+        try {
+            // Persistir en base de datos para evitar pérdida en redecloys
+            const fileData = await fs.readFile(req.file.path);
+            const base64 = `data:${req.file.mimetype};base64,${fileData.toString('base64')}`;
+            
+            if (type === 'logo') {
+                await pool.query('INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2', ['logo', base64]);
+            } else if (type === 'product' && factoryId) {
+                await pool.query('INSERT INTO factory_images (factory_id, image_data) VALUES ($1, $2) ON CONFLICT (factory_id) DO UPDATE SET image_data = $2', [factoryId, base64]);
+            }
+            
+            res.json({ success: true, file: req.file });
+        } catch (err: any) {
+            console.error('Upload persistence error:', err);
+            // Fallback: responder éxito aunque falle la DB (el archivo físico existe temporalmente)
+            res.json({ success: true, file: req.file, Warning: 'DB Persistence failed' });
+        }
     });
 
     // Product Images
     app.get('/api/products/:factoryId/image', async (req, res) => {
         const { factoryId } = req.params;
+
+        try {
+            // Prioridad: DB
+            const result = await pool.query('SELECT image_data FROM factory_images WHERE factory_id = $1', [factoryId]);
+            if (result.rows.length > 0) {
+                const base64 = result.rows[0].image_data;
+                const matches = base64.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.*)$/);
+                if (matches) {
+                    const mimeType = matches[1];
+                    const content = matches[2];
+                    const img = Buffer.from(content, 'base64');
+                    res.writeHead(200, {
+                        'Content-Type': mimeType,
+                        'Content-Length': img.length
+                    });
+                    return res.end(img);
+                }
+            }
+        } catch (err) {
+            console.error('DB fetch error for image:', err);
+        }
+
         const extensions = ['.jpg', '.jpeg', '.png', '.webp'];
         
         for (const ext of extensions) {
@@ -466,14 +542,12 @@ async function startServer() {
             try {
                 const originalName = file.originalname;
                 const factoryId = path.parse(originalName).name.trim();
-                const ext = path.parse(originalName).ext.toLowerCase();
                 
-                // Si el archivo ya está en productsDir (gracias a multer si se pasó factoryId), perfecto.
-                // Si no, lo movemos/renombramos si es necesario.
-                // Pero como usamos diskStorage genérico, multer lo guardó en uploadsDir por defecto si no hay query.
+                // Persistir en DB
+                const fileData = await fs.readFile(file.path);
+                const base64 = `data:${file.mimetype};base64,${fileData.toString('base64')}`;
+                await pool.query('INSERT INTO factory_images (factory_id, image_data) VALUES ($1, $2) ON CONFLICT (factory_id) DO UPDATE SET image_data = $2', [factoryId, base64]);
                 
-                const targetPath = path.join(productsDir, `${factoryId}${ext}`);
-                await fs.rename(file.path, targetPath);
                 stats.success++;
             } catch (err) {
                 console.error('Error processing bulk file:', err);

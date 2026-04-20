@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.017",
+        date: "2026-04-20",
+        title: "Persistencia Multimedia",
+        changes: [
+            "Almacenamiento Persistente: Las fotos de productos y el logo ahora se guardan en la base de datos (PostgreSQL).",
+            "Protección contra Redeploy: Se solucionó el problema donde las imágenes desaparecían al actualizar la aplicación.",
+            "Migración Automática: Nuevas tablas 'factory_images' y 'settings' para gestionar archivos de forma robusta.",
+            "Retrocompatibilidad: El sistema sigue reconociendo archivos físicos antiguos si existen en el servidor."
+        ]
+    },
+    {
         version: "1.2.016",
         date: "2026-04-20",
         title: "Resumen Financiero",
