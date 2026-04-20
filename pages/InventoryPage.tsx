@@ -1,6 +1,6 @@
 /**
  * InventoryPage.tsx
- * Version: 1.2.009
+ * Version: 1.2.010
  */
 import React, { useState, useMemo } from 'react';
 import Card from '../components/Card';
@@ -26,7 +26,7 @@ import { useToast } from '../hooks/useToast';
  */
 const InventoryPage: React.FC = () => {
     const { 
-        products, stock, locations, 
+        products, stock, locations, movements,
         addProduct, updateProduct, deleteProduct, 
         updateStock, addMovement, setInitialData, addBulkMovements,
         loading, error, fetchData
@@ -116,6 +116,24 @@ const InventoryPage: React.FC = () => {
         currentQty: number;
         reason: string;
     } | null>(null);
+
+    // Pre-calcular mapa de ventas por producto para eficiencia
+    const salesByProduct = useMemo(() => {
+        const map: Record<string, number> = {};
+        movements.forEach(m => {
+            if (m.type === MovementType.SALE) {
+                map[m.productId] = (map[m.productId] || 0) + Number(m.quantity);
+            }
+        });
+        return map;
+    }, [movements]);
+
+    // Filtrar ubicaciones que no tienen stock en ningún producto (para simplificar la tabla)
+    const activeLocations = useMemo(() => {
+        return locations.filter(loc => 
+            stock.some(s => s.locationId === loc.id && Number(s.quantity) !== 0)
+        );
+    }, [locations, stock]);
 
     // useMemo para filtrar productos solo cuando la lista de productos o el término de búsqueda cambian.
     const filteredProducts = useMemo(() => {
@@ -705,9 +723,9 @@ const InventoryPage: React.FC = () => {
             if (movementsToBatch.length === 0) {
                 const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
                 if (errorSummary) {
-                    addToast(`No se procesó nada. Resumen de errores:\n${errorSummary}\n\nUbicaciones recomendadas: ${locations.slice(0, 10).map(l => l.name).join(', ')}`, 'error');
+                    addToast(`No se procesó nada. Resumen de errores:\n${errorSummary}\n\nUbicaciones reconocidas en el sistema: ${locations.map(l => l.name).join(', ')}`, 'error');
                 } else {
-                    addToast('No se encontraron ventas válidas.', 'warning');
+                    addToast('No se encontraron ventas válidas en el archivo seleccionado.', 'warning');
                 }
                 return;
             }
@@ -806,9 +824,10 @@ const InventoryPage: React.FC = () => {
                                 <th scope="col" className="px-4 py-3">Imagen</th>
                                 <th scope="col" className="px-4 py-3">Código Venta / Fábrica</th>
                                 <th scope="col" className="px-4 py-3">Descripción</th>
-                                {locations.map(loc => (
+                                {activeLocations.map(loc => (
                                     <th key={loc.id} scope="col" className="px-4 py-3 text-center">{loc.name}</th>
                                 ))}
+                                <th scope="col" className="px-4 py-3 text-center">Ventas</th>
                                 <th scope="col" className="px-4 py-3 text-center">Total</th>
                                 <th scope="col" className="px-4 py-3 text-center">
                                     <div className="flex items-center justify-center">
@@ -874,22 +893,23 @@ const InventoryPage: React.FC = () => {
                                                 </span>
                                             )}
                                         </td>
-                                        {locations.map(loc => {
+                                        {activeLocations.map(loc => {
                                             const qty = getStockForProductAndLocation(product.id_venta, loc.id);
                                             const minStock = product.minStock ?? 2;
                                             
                                             // Indicador visual por celda
                                             let cellBg = '';
-                                            if (qty < minStock) cellBg = 'bg-red-100 text-red-800';
-                                            else if (qty === minStock) cellBg = 'bg-yellow-100 text-yellow-800';
-                                            else if (qty > 0) cellBg = 'bg-green-100 text-green-800';
+                                            if (qty < minStock && qty > 0) cellBg = 'bg-red-50 text-red-800';
+                                            else if (qty === minStock) cellBg = 'bg-yellow-50 text-yellow-800';
+                                            else if (qty > 0) cellBg = 'bg-green-50 text-green-800';
+                                            else if (qty < 0) cellBg = 'bg-red-200 text-red-900'; // Saldo negativo
 
                                             const isEditing = editingCell?.productId === product.id_venta && editingCell?.locationId === loc.id;
 
                                             return (
                                                 <td 
                                                     key={loc.id} 
-                                                    className={`px-4 py-4 text-center cursor-pointer transition-all duration-200 ${isEditing ? 'bg-white ring-2 ring-primary ring-inset' : cellBg}`}
+                                                    className={`px-4 py-4 text-center cursor-pointer border-x border-gray-100 transition-all duration-200 ${isEditing ? 'bg-white ring-2 ring-primary ring-inset' : cellBg}`}
                                                     onClick={() => {
                                                         if (!isEditing) {
                                                             setEditingCell({ productId: product.id_venta, locationId: loc.id });
@@ -911,16 +931,20 @@ const InventoryPage: React.FC = () => {
                                                             }}
                                                         />
                                                     ) : (
-                                                        <span className="font-bold">{qty}</span>
+                                                        <span className={qty === 0 ? "text-text-light/30 text-xs" : "font-bold"}>{qty}</span>
                                                     )}
                                                 </td>
                                             );
                                         })}
-                                        <td className={`px-4 py-4 text-center font-bold transition-colors ${
-                                            totalStock < (product.minStock ?? 2) ? 'bg-red-200 text-red-900' : 
-                                            totalStock === (product.minStock ?? 2) ? 'bg-yellow-200 text-yellow-900' : 
-                                            'bg-green-200 text-green-900'
-                                        }`}>{totalStock}</td>
+                                        <td className="px-4 py-4 text-center font-medium text-secondary bg-secondary/5">
+                                            {salesByProduct[product.id_venta] || 0}
+                                        </td>
+                                        <td className={`px-4 py-4 text-center font-black transition-colors ${
+                                            totalStock < (product.minStock ?? 2) ? 'bg-red-100 text-red-900 border-red-200' : 
+                                            'bg-accent/30 text-primary border-accent/20'
+                                        }`}>
+                                            {totalStock + (salesByProduct[product.id_venta] || 0)}
+                                        </td>
                                         <td 
                                             className="px-4 py-4 text-center cursor-pointer hover:bg-accent/10 transition-colors"
                                             onClick={() => {
@@ -1034,7 +1058,7 @@ const InventoryPage: React.FC = () => {
                     <div className="space-y-3">
                         <h4 className="font-bold text-primary border-b border-accent pb-2">Distribución por Ubicación</h4>
                         <div className="grid grid-cols-1 gap-2">
-                            {locations.map(loc => {
+                            {activeLocations.map(loc => {
                                 const qty = getStockForProductAndLocation(selectedProduct?.id_venta || '', loc.id);
                                 if (qty === 0) return null;
                                 return (

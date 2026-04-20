@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.010",
+        date: "2026-04-20",
+        title: "Ventas & Cuadratura",
+        changes: [
+            "Nueva columna 'Ventas': Seguimiento acumulativo de ventas por producto en la tabla principal.",
+            "Columna Total mejorada: Ahora representa Stock + Ventas para cuadrar perfectamente con la carga inicial.",
+            "Optimización de Pantalla: El sistema ahora oculta automáticamente las sucursales con stock 0 para despejar la vista.",
+            "Diagnóstico de Importación: Mensajes de error mejorados al subir ventas, listando las sucursales válidas en caso de error de coincidencia."
+        ]
+    },
+    {
         version: "1.2.009",
         date: "2026-04-20",
         title: "IVA Chile & Admin Controls",
