@@ -49,6 +49,7 @@ interface InventoryContextType {
     fetchData: () => Promise<void>;
     checkHealth: () => Promise<void>;
     fetchLogo: () => Promise<void>;
+    returnAllToWarehouse: (locationId: string) => Promise<void>;
     addBulkMovements: (movements: (Omit<Movement, 'id' | 'timestamp'> & { timestamp?: Date | string })[], stockAdjustments: { productId: string, locationId: string, quantityChange: number }[]) => Promise<void>;
     
     // Auth
@@ -484,6 +485,48 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
     }, [fetchData]);
     
+    const returnAllToWarehouse = useCallback(async (locationId: string) => {
+        // Encontrar la bodega central (BODCENT)
+        const central = locations.find(l => l.id === 'BODCENT' || l.name?.toUpperCase().includes('BODEGA CENTRAL') || l.name?.toUpperCase() === 'BODEGA');
+        if (!central) throw new Error('No se encontró la Bodega Central (BODCENT/BODEGA)');
+        if (locationId === central.id) throw new Error('La ubicación de origen ya es la Bodega Central');
+        
+        // Obtener stock remanente
+        const itemsToReturn = stock.filter(s => s.locationId === locationId && s.quantity > 0);
+        if (itemsToReturn.length === 0) return; // Nada que retornar
+        
+        const movementsBatch: any[] = [];
+        const stockAdjustments: any[] = [];
+        
+        itemsToReturn.forEach(s => {
+            const qty = s.quantity;
+            // Movimiento de salida
+            movementsBatch.push({
+                productId: s.productId,
+                quantity: qty,
+                type: MovementType.TRANSFER_OUT,
+                fromLocationId: locationId,
+                toLocationId: central.id,
+                relatedFile: 'Retorno Masivo (Cierre)'
+            });
+            // Movimiento de entrada
+            movementsBatch.push({
+                productId: s.productId,
+                quantity: qty,
+                type: MovementType.TRANSFER_IN,
+                fromLocationId: locationId,
+                toLocationId: central.id,
+                relatedFile: 'Retorno Masivo (Cierre)'
+            });
+            
+            // Ajustes de stock
+            stockAdjustments.push({ productId: s.productId, locationId: locationId, quantityChange: -qty });
+            stockAdjustments.push({ productId: s.productId, locationId: central.id, quantityChange: qty });
+        });
+        
+        await addBulkMovements(movementsBatch, stockAdjustments);
+    }, [locations, stock, addBulkMovements]);
+
     return (
         <InventoryContext.Provider value={{ 
             products, stock, movements, locations, users, 
@@ -494,6 +537,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             addLocation, updateLocation, deleteLocation,
             addUser, updateUser, deleteUser,
             loading, error, dbStatus, logo, fetchData, checkHealth, fetchLogo, addBulkMovements,
+            returnAllToWarehouse,
             currentUser, isAuthenticated: !!currentUser, login, logout
         }}>
             {children}

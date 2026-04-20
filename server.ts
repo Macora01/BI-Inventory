@@ -401,17 +401,23 @@ async function startServer() {
     // Endpoint para obtener la configuración del logo (usado por el frontend)
     app.get('/api/settings/logo', async (req, res) => {
         try {
-            const logoPath = path.join(uploadsDir, 'logo.png');
-            await fs.access(logoPath);
-            res.json({ logo: '/api/logo' });
-        } catch {
+            // Primero verificamos si existe en uploads o public
+            const uploadsLogo = path.join(uploadsDir, 'logo.png');
+            const publicLogo = path.join(process.cwd(), 'public', 'logo.png');
+            
             try {
-                const publicLogoPath = path.join(process.cwd(), 'public', 'logo.png');
-                await fs.access(publicLogoPath);
-                res.json({ logo: '/logo.png' });
+                await fs.access(uploadsLogo);
+                return res.json({ logo: '/api/logo' });
             } catch {
-                res.json({ logo: null });
+                try {
+                    await fs.access(publicLogo);
+                    return res.json({ logo: '/api/logo' });
+                } catch {
+                    return res.json({ logo: null });
+                }
             }
+        } catch (err) {
+            res.json({ logo: null });
         }
     });
 

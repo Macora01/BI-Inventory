@@ -4,11 +4,22 @@ import Button from '../components/Button';
 import { useInventory } from '../context/InventoryContext';
 import { Location, User, LocationType, LOCATION_TYPE_MAP } from '../types';
 import Modal from '../components/Modal';
-import { Edit, Trash2, Database, CheckCircle2, XCircle, RefreshCw, AlertTriangle, Upload, Download, FileUp } from 'lucide-react';
+import { Edit, Trash2, Database, CheckCircle2, XCircle, RefreshCw, AlertTriangle, Upload, Download, FileUp, RotateCcw } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
+    {
+        version: "1.2.008",
+        date: "2026-04-20",
+        title: "Logo Fix & Total Return",
+        changes: [
+            "Corrección de Logo: Estandarizado el servicio de logo vía /api/logo para evitar desapariciones.",
+            "Retorno Total a Bodega: Nueva herramienta en Configuración > Ubicaciones para devolver todo el stock de una tienda a BODCENT con un clic.",
+            "Mejoras de Seguridad: Reforzada la validación de archivos XLSX en el procesamiento de ventas.",
+            "Sincronización Contextual: El sistema de versiones ahora se refleja correctamente en todos los componentes."
+        ]
+    },
     {
         version: "1.2.007",
         date: "2026-04-20",
@@ -93,7 +104,7 @@ const SettingsPage: React.FC = () => {
         clearAllData, clearProducts, clearLocations, clearUsers,
         backupData, restoreData,
         dbStatus, checkHealth, loading,
-        logo, fetchLogo
+        logo, fetchLogo, returnAllToWarehouse
     } = useInventory();
     const { addToast } = useToast();
 
@@ -231,6 +242,19 @@ const SettingsPage: React.FC = () => {
         setEditingLocation(location);
         setFormData(location || { name: '', type: LocationType.FIXED_STORE_PERMANENT });
         setLocationModalOpen(true);
+    };
+
+    const handleReturnAll = async (location: Location) => {
+        if (!window.confirm(`¿Está seguro de retornar TODO el stock remanente de "${location.name}" a la Bodega Central (BODCENT)? Esta acción generará múltiples movimientos de transferencia.`)) {
+            return;
+        }
+        
+        try {
+            await returnAllToWarehouse(location.id);
+            addToast(`Stock de "${location.name}" retornado exitosamente a Bodega Central.`, 'success');
+        } catch (err: any) {
+            addToast(`Error al retornar stock: ${err.message}`, 'error');
+        }
     };
 
     const handleLocationSubmit = (e: React.FormEvent) => {
@@ -389,6 +413,9 @@ const SettingsPage: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {loc.id !== 'BODCENT' && (
+                                                    <button onClick={() => handleReturnAll(loc)} className="text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-colors" title="Retornar Todo a Bodega"><RotateCcw size={16}/></button>
+                                                )}
                                                 <button onClick={() => openLocationModal(loc)} className="text-secondary hover:bg-secondary/10 p-1.5 rounded-lg transition-colors" title="Editar"><Edit size={16}/></button>
                                                 <button onClick={() => deleteLocation(loc.id)} className="text-danger hover:bg-danger/10 p-1.5 rounded-lg transition-colors" title="Eliminar"><Trash2 size={16}/></button>
                                             </div>
