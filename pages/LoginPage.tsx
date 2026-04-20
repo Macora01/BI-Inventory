@@ -43,7 +43,7 @@ const LoginPage: React.FC = () => {
             )}
           </div>
           <h1 className="text-4xl font-extrabold italic text-primary uppercase tracking-tighter">
-            Boa Ideia
+        
           </h1>
           <p className="text-text-light mt-2 font-medium">SISTEMA DE GESTIÓN DE INVENTARIO</p>
         </div>
