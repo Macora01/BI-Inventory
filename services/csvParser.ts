@@ -14,12 +14,12 @@ export const parseInitialInventoryCSV = (csvContent: string): ParsedInitialInven
   const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase());
   
   // Soporte para variaciones de cabeceras
-  const idVentaIdx = headers.findIndex(h => h === 'id_venta' || h === 'id venta' || h === 'codigo');
-  const priceIdx = headers.findIndex(h => h === 'price' || h === 'precio');
-  const costIdx = headers.findIndex(h => h === 'cost' || h === 'costo');
-  const idFabricaIdx = headers.findIndex(h => h === 'id_fabrica' || h === 'id fabrica');
-  const qtyIdx = headers.findIndex(h => h === 'qty' || h === 'cantidad' || h === 'stock');
-  const descIdx = headers.findIndex(h => h === 'description' || h === 'descripcion');
+  const idVentaIdx = headers.findIndex(h => h.includes('id_venta') || h.includes('id venta') || h.includes('codigo') || h.includes('id_producto'));
+  const priceIdx = headers.findIndex(h => h.includes('price') || h.includes('precio') || h.includes('venta'));
+  const costIdx = headers.findIndex(h => h.includes('cost') || h.includes('costo'));
+  const idFabricaIdx = headers.findIndex(h => h.includes('id_fabrica') || h.includes('id fabrica') || h.includes('fabrica'));
+  const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('cantidad') || h.includes('stock'));
+  const descIdx = headers.findIndex(h => h.includes('description') || h.includes('descripcion') || h.includes('nombre'));
 
   return lines.slice(1).map(line => {
     const values = line.split(delimiter).map(v => v.trim());
@@ -65,13 +65,13 @@ export const parseSalesCSV = (csvContent: string): ParsedSale[] => {
     const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase());
     
     // Formato: timestamp; lugar; cod_fabrica; cod_venta; description; precio; qty
-    const timestampIdx = headers.findIndex(h => h === 'timestamp' || h === 'fecha');
-    const lugarIdx = headers.findIndex(h => h === 'lugar' || h === 'tienda');
-    const codFabricaIdx = headers.findIndex(h => h === 'cod_fabrica' || h === 'cod fabrica');
-    const codVentaIdx = headers.findIndex(h => h === 'cod_venta' || h === 'id_venta' || h === 'cod venta' || h === 'codigo');
-    const descIdx = headers.findIndex(h => h === 'description' || h === 'descripcion');
-    const precioIdx = headers.findIndex(h => h === 'precio' || h === 'price');
-    const qtyIdx = headers.findIndex(h => h === 'qty' || h === 'cantidad');
+    const timestampIdx = headers.findIndex(h => h.includes('timestamp') || h.includes('fecha'));
+    const lugarIdx = headers.findIndex(h => h.includes('lugar') || h.includes('tienda'));
+    const codFabricaIdx = headers.findIndex(h => h.includes('cod_fabrica') || h.includes('cod fabrica') || h.includes('fabrica'));
+    const codVentaIdx = headers.findIndex(h => h.includes('cod_venta') || h.includes('id_venta') || h.includes('cod venta') || h.includes('codigo'));
+    const descIdx = headers.findIndex(h => h.includes('description') || h.includes('descripcion') || h.includes('nombre'));
+    const precioIdx = headers.findIndex(h => h.includes('precio') || h.includes('price'));
+    const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('cantidad'));
 
     return lines.slice(1).map(line => {
         const values = line.split(delimiter).map(v => v.trim());

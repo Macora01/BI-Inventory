@@ -1,6 +1,6 @@
 /**
  * LoginPage.tsx
- * Version: 1.1.000
+ * Version: 1.2.002
  */
 import React, { useState } from 'react';
 import { useInventory } from '../context/InventoryContext';
@@ -13,7 +13,7 @@ const LoginPage: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const { login } = useInventory();
+  const { login, logo } = useInventory();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,12 +29,18 @@ const LoginPage: React.FC = () => {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <div className="inline-flex mb-6 drop-shadow-xl transition-transform hover:scale-105 duration-300">
-            <img 
-              src="/logo.png" 
-              alt="Boa Ideia Logo" 
-              className="h-32 w-auto object-contain"
-              referrerPolicy="no-referrer"
-            />
+            {logo ? (
+              <img 
+                src={logo} 
+                alt="Boa Ideia Logo" 
+                className="h-32 w-auto object-contain"
+                referrerPolicy="no-referrer"
+              />
+            ) : (
+              <div className="bg-primary p-4 rounded-2xl shadow-lg">
+                <Zap size={64} className="text-secondary" />
+              </div>
+            )}
           </div>
           <h1 className="text-4xl font-extrabold italic text-primary uppercase tracking-tighter">
             Boa Ideia
@@ -108,28 +114,28 @@ const LoginPage: React.FC = () => {
 };
 
 // Internal icons needed
-const Archive = ({ size, className }: { size: number, className: string }) => (
+const Archive = ({ size, className }: { size: number, className?: string }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <path d="M21 8V20a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8" /><path d="M1 3h22v5H1z" /><path d="M10 12h4" />
     </svg>
 );
-const Zap = ({ size }: { size: number }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const Zap = ({ size, className }: { size: number, className?: string }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
     </svg>
 );
-const Eye = ({ size }: { size: number }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const Eye = ({ size, className }: { size: number, className?: string }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
     </svg>
 );
-const BarChart3 = ({ size }: { size: number }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const BarChart3 = ({ size, className }: { size: number, className?: string }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <path d="M18 20V10" /><path d="M12 20V4" /><path d="M6 20V14" />
     </svg>
 );
-const X = ({ size }: { size: number }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const X = ({ size, className }: { size: number, className?: string }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
         <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
     </svg>
 );

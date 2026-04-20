@@ -50,6 +50,7 @@ export enum LocationType {
   FIXED_STORE_PERMANENT = 'FIXED_STORE_PERMANENT',
   FIXED_STORE_TEMPORARY = 'FIXED_STORE_TEMPORARY',
   MOBILE_STORE = 'MOBILE_STORE',
+  ONLINE_STORE = 'ONLINE_STORE',
   WAREHOUSE = 'WAREHOUSE'
 }
 
@@ -63,6 +64,7 @@ export const LOCATION_TYPE_MAP: Record<LocationType, string> = {
   [LocationType.FIXED_STORE_PERMANENT]: 'Tienda Fija Permanente',
   [LocationType.FIXED_STORE_TEMPORARY]: 'Tienda Fija Temporal',
   [LocationType.MOBILE_STORE]: 'Tienda Móvil',
+  [LocationType.ONLINE_STORE]: 'Tienda On Line',
   [LocationType.WAREHOUSE]: 'Bodega'
 };
 
