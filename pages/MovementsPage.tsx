@@ -113,8 +113,14 @@ const MovementsPage: React.FC = () => {
                 const qty = Number(item.qty);
                 if (!prodId || qty <= 0) continue;
 
-                const fromLoc = locations.find(l => l.name.toLowerCase() === item.sitio_inicial?.toLowerCase());
-                const toLoc = locations.find(l => l.name.toLowerCase() === item.sitio_final?.toLowerCase());
+                const fromLoc = locations.find(l => 
+                    l.name.toLowerCase() === item.sitio_inicial?.toLowerCase() ||
+                    l.id.toLowerCase() === item.sitio_inicial?.toLowerCase()
+                );
+                const toLoc = locations.find(l => 
+                    l.name.toLowerCase() === item.sitio_final?.toLowerCase() ||
+                    l.id.toLowerCase() === item.sitio_final?.toLowerCase()
+                );
 
                 if (!fromLoc) {
                     errors.push(`Error: El sitio inicial "${item.sitio_inicial}" no existe.`);
@@ -198,7 +204,8 @@ const MovementsPage: React.FC = () => {
                         if (!idVenta || !lugarStr) continue;
 
                         const fromLocation = locations.find(l => 
-                            l.name.toLowerCase() === lugarStr.toLowerCase()
+                            l.name.toLowerCase() === lugarStr.toLowerCase() ||
+                            l.id.toLowerCase() === lugarStr.toLowerCase()
                         );
 
                         if (!fromLocation) {
@@ -208,11 +215,12 @@ const MovementsPage: React.FC = () => {
                         
                         let timestamp = new Date().toISOString();
                         if (fechaStr) {
-                            const parts = fechaStr.includes('-') ? fechaStr.split('-') : fechaStr.split('/');
+                            const parts = (String(fechaStr).includes('-') ? String(fechaStr).split('-') : String(fechaStr).split('/')).map(p => p.trim());
                             if (parts.length === 3) {
                                 const day = parseInt(parts[0], 10);
                                 const month = parseInt(parts[1], 10) - 1;
-                                const year = parseInt(parts[2], 10);
+                                let year = parseInt(parts[2], 10);
+                                if (year < 100) year += 2000;
                                 timestamp = new Date(year, month, day).toISOString();
                             }
                         }
