@@ -49,6 +49,7 @@ interface InventoryContextType {
     fetchData: () => Promise<void>;
     checkHealth: () => Promise<void>;
     fetchLogo: () => Promise<void>;
+    addBulkMovements: (movements: (Omit<Movement, 'id' | 'timestamp'> & { timestamp?: Date | string })[], stockAdjustments: { productId: string, locationId: string, quantityChange: number }[]) => Promise<void>;
     
     // Auth
     currentUser: User | null;
@@ -120,6 +121,47 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             }
         } catch (err) {
             console.error('Error fetching logo:', err);
+        }
+    }, []);
+
+    const addBulkMovements = useCallback(async (movements: (Omit<Movement, 'id' | 'timestamp'> & { timestamp?: Date | string })[], stockAdjustments: { productId: string, locationId: string, quantityChange: number }[]) => {
+        const fullMovements = movements.map(m => ({
+            ...m,
+            id: generateId('mov'),
+            timestamp: m.timestamp || new Date().toISOString()
+        }));
+
+        try {
+            const response = await fetch('/api/movements/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ movements: fullMovements, stockAdjustments })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Error en procesamiento masivo');
+            }
+
+            // Actualizar localmente para inmediatez
+            setMovements(prev => [...fullMovements.map(m => ({ ...m, timestamp: new Date(m.timestamp) })), ...prev]);
+            
+            setStock(prevStock => {
+                const newStock = [...prevStock];
+                for (const sa of stockAdjustments) {
+                    const idx = newStock.findIndex(s => s.productId === sa.productId && s.locationId === sa.locationId);
+                    if (idx > -1) {
+                        newStock[idx] = { ...newStock[idx], quantity: Number(newStock[idx].quantity) + sa.quantityChange };
+                    } else if (sa.quantityChange > 0) {
+                        newStock.push({ productId: sa.productId, locationId: sa.locationId, quantity: sa.quantityChange });
+                    }
+                }
+                return newStock;
+            });
+
+        } catch (error) {
+            console.error('Error in bulk movements context:', error);
+            throw error;
         }
     }, []);
 
@@ -451,7 +493,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             addProduct, updateProduct, deleteProduct,
             addLocation, updateLocation, deleteLocation,
             addUser, updateUser, deleteUser,
-            loading, error, dbStatus, logo, fetchData, checkHealth, fetchLogo,
+            loading, error, dbStatus, logo, fetchData, checkHealth, fetchLogo, addBulkMovements,
             currentUser, isAuthenticated: !!currentUser, login, logout
         }}>
             {children}

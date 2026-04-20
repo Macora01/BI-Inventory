@@ -292,6 +292,65 @@ async function startServer() {
         }
     });
 
+    // Bulk Movements and Stock Update (Atomic)
+    app.post('/api/movements/bulk', async (req, res) => {
+        const { movements, stockAdjustments } = req.body;
+        const currentPool = getPool();
+        
+        if (isPgActive && currentPool) {
+            try {
+                await currentPool.query('BEGIN');
+                
+                // 1. Insertar todos los movimientos
+                for (const m of movements) {
+                    const id = m.id || `mov-${Date.now()}-${Math.random()}`;
+                    const keys = Object.keys(m);
+                    const quotedKeys = keys.map(k => `"${k}"`).join(',');
+                    const placeholders = keys.map((_, i) => `$${i + 1}`).join(',');
+                    await currentPool.query(`INSERT INTO movements (${quotedKeys}) VALUES (${placeholders}) ON CONFLICT (id) DO NOTHING`, Object.values(m));
+                }
+                
+                // 2. Actualizar stocks de forma relativa
+                for (const sa of stockAdjustments) {
+                    await currentPool.query(`
+                        INSERT INTO stock ("productId", "locationId", quantity)
+                        VALUES ($1, $2, $3)
+                        ON CONFLICT ("productId", "locationId")
+                        DO UPDATE SET quantity = stock.quantity + $3
+                    `, [sa.productId, sa.locationId, sa.quantityChange]);
+                }
+                
+                await currentPool.query('COMMIT');
+                res.json({ success: true, count: movements.length });
+            } catch (err: any) {
+                await currentPool.query('ROLLBACK').catch(() => {});
+                console.error('Error in bulk movements:', err);
+                res.status(500).json({ error: err.message });
+            }
+        } else {
+            // Fallback JSON mode
+            const movementsData = await readDataJson('movements', []);
+            const stockData = await readDataJson('stock', []);
+            
+            for (const m of movements) {
+                movementsData.unshift({ ...m, timestamp: m.timestamp || new Date().toISOString() });
+            }
+            
+            for (const sa of stockAdjustments) {
+                const idx = stockData.findIndex((s: any) => s.productId === sa.productId && s.locationId === sa.locationId);
+                if (idx > -1) {
+                    stockData[idx].quantity = Number(stockData[idx].quantity) + Number(sa.quantityChange);
+                } else if (sa.quantityChange > 0) {
+                    stockData.push({ productId: sa.productId, locationId: sa.locationId, quantity: sa.quantityChange });
+                }
+            }
+            
+            await writeDataJson('movements', movementsData);
+            await writeDataJson('stock', stockData);
+            res.json({ success: true, count: movements.length });
+        }
+    });
+
     // Stock Update Special (Moved UP)
     app.post('/api/stock/update', async (req, res) => {
         const { productId, locationId, quantityChange } = req.body;
@@ -329,7 +388,13 @@ async function startServer() {
             await fs.access(logoPath);
             res.sendFile(logoPath);
         } catch {
-            res.status(404).json({ error: 'Logo not found' });
+            try {
+                const publicLogoPath = path.join(process.cwd(), 'public', 'logo.png');
+                await fs.access(publicLogoPath);
+                res.sendFile(publicLogoPath);
+            } catch {
+                res.status(404).json({ error: 'Logo not found' });
+            }
         }
     });
 
@@ -340,7 +405,13 @@ async function startServer() {
             await fs.access(logoPath);
             res.json({ logo: '/api/logo' });
         } catch {
-            res.json({ logo: null });
+            try {
+                const publicLogoPath = path.join(process.cwd(), 'public', 'logo.png');
+                await fs.access(publicLogoPath);
+                res.json({ logo: '/logo.png' });
+            } catch {
+                res.json({ logo: null });
+            }
         }
     });
 

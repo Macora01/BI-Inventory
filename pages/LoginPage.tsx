@@ -30,7 +30,7 @@ const LoginPage: React.FC = () => {
         <div className="text-center">
           <div className="inline-flex mb-6 drop-shadow-xl transition-transform hover:scale-105 duration-300">
             <img 
-              src="/uploads/logo.png" 
+              src="/logo.png" 
               alt="Boa Ideia Logo" 
               className="h-32 w-auto object-contain"
               referrerPolicy="no-referrer"

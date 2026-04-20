@@ -41,10 +41,10 @@ export const parseTransferCSV = (csvContent: string): ParsedTransfer[] => {
     const delimiter = detectDelimiter(lines[0]);
     const headers = lines[0].split(delimiter).map(h => h.trim().toLowerCase());
     
-    const sitioInicIdx = headers.findIndex(h => h === 'sitio_inicial' || h === 'origen');
-    const sitioFinalIdx = headers.findIndex(h => h === 'sitio_final' || h === 'destino');
-    const idVentaIdx = headers.findIndex(h => h === 'id_venta' || h === 'id venta' || h === 'codigo');
-    const qtyIdx = headers.findIndex(h => h === 'qty' || h === 'cantidad');
+    const sitioInicIdx = headers.findIndex(h => h.includes('sitio_inicial') || h.includes('origen') || h.includes('inicial'));
+    const sitioFinalIdx = headers.findIndex(h => h.includes('sitio_final') || h.includes('destino') || h.includes('final'));
+    const idVentaIdx = headers.findIndex(h => h.includes('id_venta') || h.includes('id venta') || h.includes('codigo') || h.includes('id_venta'));
+    const qtyIdx = headers.findIndex(h => h.includes('qty') || h.includes('cantidad'));
 
     return lines.slice(1).map(line => {
         const values = line.split(delimiter).map(v => v.trim());

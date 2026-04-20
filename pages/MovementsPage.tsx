@@ -10,7 +10,7 @@ import { MOVEMENT_TYPE_MAP } from '../constants';
 const normalizeName = (name: string) => name.toLowerCase().replace(/[\s_]/g, '');
 
 const MovementsPage: React.FC = () => {
-    const { addMovement, updateStock, setInitialData, locations, products, movements, stock, addProduct, updateProduct } = useInventory();
+    const { addMovement, updateStock, setInitialData, locations, products, movements, stock, addProduct, updateProduct, addBulkMovements } = useInventory();
     const { addToast } = useToast();
 
     const getStock = (productId: string, locationId: string) => {
@@ -105,10 +105,13 @@ const MovementsPage: React.FC = () => {
         try {
             const parsedData = parseTransferCSV(content);
             const errors: string[] = [];
+            const movementsToBatch: any[] = [];
+            const stockAdjustments: any[] = [];
 
             for (const item of parsedData) {
-                if (!item.id_venta || !item.qty) continue;
+                const prodId = item.id_venta;
                 const qty = Number(item.qty);
+                if (!prodId || qty <= 0) continue;
 
                 const fromLoc = locations.find(l => l.name.toLowerCase() === item.sitio_inicial?.toLowerCase());
                 const toLoc = locations.find(l => l.name.toLowerCase() === item.sitio_final?.toLowerCase());
@@ -122,43 +125,49 @@ const MovementsPage: React.FC = () => {
                     continue;
                 }
 
-                const currentStock = getStock(item.id_venta, fromLoc.id);
+                const currentStock = getStock(prodId, fromLoc.id);
                 if (currentStock < qty) {
-                    errors.push(`Error: Stock insuficiente para "${item.id_venta}" en "${item.sitio_inicial}". Disponible: ${currentStock}, Requerido: ${qty}.`);
+                    errors.push(`Error: Stock insuficiente para "${prodId}" en "${item.sitio_inicial}". Disponible: ${currentStock}, Requerido: ${qty}.`);
                     continue;
                 }
 
-                await updateStock(item.id_venta, fromLoc.id, -qty);
-                await updateStock(item.id_venta, toLoc.id, qty);
-                
-                await addMovement({
-                    productId: item.id_venta,
+                movementsToBatch.push({
+                    productId: prodId,
                     quantity: qty,
                     type: MovementType.TRANSFER_OUT,
                     fromLocationId: fromLoc.id,
                     toLocationId: toLoc.id,
                     relatedFile: file.name
                 });
-
-                await addMovement({
-                    productId: item.id_venta,
+                movementsToBatch.push({
+                    productId: prodId,
                     quantity: qty,
                     type: MovementType.TRANSFER_IN,
                     fromLocationId: fromLoc.id,
                     toLocationId: toLoc.id,
                     relatedFile: file.name
                 });
+
+                stockAdjustments.push({ productId: prodId, locationId: fromLoc.id, quantityChange: -qty });
+                stockAdjustments.push({ productId: prodId, locationId: toLoc.id, quantityChange: qty });
             }
 
+            if (movementsToBatch.length === 0) {
+                addToast('No se encontraron transferencias válidas.', 'warning');
+                return;
+            }
+
+            await addBulkMovements(movementsToBatch, stockAdjustments);
+
             if (errors.length > 0) {
-                addToast(`Transferencia procesada con errores:\n${errors.join('\n')}`, 'error');
+                addToast(`Transferencia procesada con errores:\n${errors.slice(0, 5).join('\n')}${errors.length > 5 ? '...' : ''}`, 'warning');
             } else {
-                addToast(`Transferencia desde '${file.name}' procesada exitosamente.`, 'success');
+                addToast(`Transferencia desde '${file.name}' procesada exitosamente (${movementsToBatch.length / 2} items).`, 'success');
             }
         } catch (error: any) {
             addToast(`Error procesando transferencia: ${error.message}`, 'error');
         }
-    }, [addMovement, updateStock, locations, addToast, products, getStock]);
+    }, [addBulkMovements, locations, addToast, getStock]);
 
     const processSales = useCallback(async (content: string, file: File) => {
         try {
@@ -166,17 +175,19 @@ const MovementsPage: React.FC = () => {
             Papa.parse(content, {
                 header: true,
                 skipEmptyLines: true,
-                delimiter: ";",
+                delimiter: "", // Auto detect
                 complete: async (results) => {
                     const data = results.data;
                     const errors: string[] = [];
-                    let successCount = 0;
+                    const movementsToBatch: any[] = [];
+                    const stockAdjustments: any[] = [];
 
                     for (const item of data as any[]) {
                         const fechaStr = item['fecha'] || item['fecha(DD-MM-AAA)'] || item['timestamp'];
-                        const lugarStr = item['lugar'];
-                        let idVenta = item['id_venta'] || item['cod_venta'];
-                        let precio = Number(item['precio']) || 0;
+                        const lugarStr = item['lugar'] || item['tienda'];
+                        let idVenta = item['id_venta'] || item['cod_venta'] || item['id venta'] || item['codigo'];
+                        let precio = Number(item['precio'] || item['price']) || 0;
+                        let qty = Number(item['qty'] || item['cantidad']) || 1;
 
                         const extra = item['__parsed_extra'];
                         if (extra && extra.length === 1) {
@@ -194,33 +205,53 @@ const MovementsPage: React.FC = () => {
                             errors.push(`Error: La ubicación '${lugarStr}' no existe.`);
                             continue;
                         }
-
-                        const qty = Number(item['qty']) || 1;
                         
-                        await updateStock(idVenta, fromLocation.id, -qty);
-                        await addMovement({
+                        let timestamp = new Date().toISOString();
+                        if (fechaStr) {
+                            const parts = fechaStr.includes('-') ? fechaStr.split('-') : fechaStr.split('/');
+                            if (parts.length === 3) {
+                                const day = parseInt(parts[0], 10);
+                                const month = parseInt(parts[1], 10) - 1;
+                                const year = parseInt(parts[2], 10);
+                                timestamp = new Date(year, month, day).toISOString();
+                            }
+                        }
+
+                        movementsToBatch.push({
                             productId: idVenta,
                             quantity: qty,
                             type: MovementType.SALE,
                             fromLocationId: fromLocation.id,
-                            relatedFile: file.name,
+                            timestamp: timestamp,
                             price: precio,
-                            cost: products.find(p => p.id_venta === idVenta)?.cost
+                            cost: products.find(p => p.id_venta === idVenta)?.cost,
+                            relatedFile: file.name
                         });
-                        successCount++;
+
+                        stockAdjustments.push({ productId: idVenta, locationId: fromLocation.id, quantityChange: -qty });
                     }
 
-                    if (errors.length > 0) {
-                        addToast(`Ventas procesadas: ${successCount}. Errores:\n${errors.slice(0, 3).join('\n')}`, 'warning');
-                    } else {
-                        addToast(`Ventas desde '${file.name}' procesadas exitosamente (${successCount} registros).`, 'success');
+                    if (movementsToBatch.length === 0) {
+                        addToast('No se encontraron ventas válidas.', 'warning');
+                        return;
+                    }
+
+                    try {
+                        await addBulkMovements(movementsToBatch, stockAdjustments);
+                        if (errors.length > 0) {
+                            addToast(`Ventas procesadas con errores:\n${errors.slice(0, 3).join('\n')}`, 'warning');
+                        } else {
+                            addToast(`Ventas desde '${file.name}' procesadas exitosamente (${movementsToBatch.length} registros).`, 'success');
+                        }
+                    } catch (err) {
+                        addToast('Error al procesar el lote de ventas.', 'error');
                     }
                 }
             });
         } catch (error: any) {
              addToast(`Error procesando ventas: ${error.message}`, 'error');
         }
-    }, [addMovement, updateStock, locations, addToast, products]);
+    }, [addBulkMovements, locations, addToast, products]);
 
     return (
         <div className="space-y-6">

@@ -28,7 +28,7 @@ const InventoryPage: React.FC = () => {
     const { 
         products, stock, locations, 
         addProduct, updateProduct, deleteProduct, 
-        updateStock, addMovement, setInitialData,
+        updateStock, addMovement, setInitialData, addBulkMovements,
         loading, error, fetchData
     } = useInventory();
     const { addToast } = useToast();
@@ -196,22 +196,31 @@ const InventoryPage: React.FC = () => {
 
     const handleSaveAdjustment = async (e: React.FormEvent) => {
         e.preventDefault();
-        const change = adjustmentData.type === 'ADD' ? adjustmentData.quantity : -adjustmentData.quantity;
+        const change = Number(adjustmentData.quantity);
+        const relativeChange = adjustmentData.type === 'ADD' ? change : -change;
         
-        // Actualizar Stock
-        await updateStock(adjustmentData.productId, adjustmentData.locationId, change);
-        
-        // Registrar Movimiento
-        await addMovement({
-            productId: adjustmentData.productId,
-            quantity: Math.abs(change),
-            type: MovementType.ADJUSTMENT,
-            fromLocationId: adjustmentData.type === 'REMOVE' ? adjustmentData.locationId : undefined,
-            toLocationId: adjustmentData.type === 'ADD' ? adjustmentData.locationId : undefined,
-            relatedFile: `Ajuste Manual: ${adjustmentData.reason}`
-        });
-        
-        setIsAdjustmentModalOpen(false);
+        try {
+            await addBulkMovements([
+                {
+                    productId: adjustmentData.productId,
+                    quantity: change,
+                    type: MovementType.ADJUSTMENT,
+                    fromLocationId: adjustmentData.type === 'REMOVE' ? adjustmentData.locationId : undefined,
+                    toLocationId: adjustmentData.type === 'ADD' ? adjustmentData.locationId : undefined,
+                    relatedFile: `Ajuste Manual: ${adjustmentData.reason}`
+                }
+            ], [
+                {
+                    productId: adjustmentData.productId,
+                    locationId: adjustmentData.locationId,
+                    quantityChange: relativeChange
+                }
+            ]);
+            setIsAdjustmentModalOpen(false);
+            addToast('Ajuste procesado con éxito', 'success');
+        } catch (err) {
+            addToast('Error al procesar el ajuste', 'error');
+        }
     };
 
     const handleOpenTransfer = (productId: string) => {
@@ -482,15 +491,17 @@ const InventoryPage: React.FC = () => {
     const processTransfers = async (content: string, file?: File) => {
         const processData = async (data: any[]) => {
             const errors: string[] = [];
+            const movementsToBatch: any[] = [];
+            const stockAdjustments: any[] = [];
             
             for (const item of data) {
-                if (!item.id_venta || !item.qty) continue;
-                const qty = Number(item.qty);
-                const prodId = String(item.id_venta);
+                const prodId = String(item.id_venta || item.codigo || item.id_producto || '');
+                const qty = Number(item.qty || item.cantidad || 0);
+                if (!prodId || qty <= 0) continue;
                 
                 // Validar existencia de ubicaciones
-                const fromLocName = String(item.sitio_inicial || '');
-                const toLocName = String(item.sitio_final || '');
+                const fromLocName = String(item.sitio_inicial || item.origen || item.inicial || '');
+                const toLocName = String(item.sitio_final || item.destino || item.final || '');
 
                 const fromLoc = locations.find(l => l.name.toLowerCase() === fromLocName.toLowerCase());
                 const toLoc = locations.find(l => l.name.toLowerCase() === toLocName.toLowerCase());
@@ -511,25 +522,44 @@ const InventoryPage: React.FC = () => {
                     continue;
                 }
                 
-                // Procesar transferencia
-                await updateStock(prodId, fromLoc.id, -qty);
-                await updateStock(prodId, toLoc.id, qty);
-                await addMovement({
+                // Añadir al lote
+                movementsToBatch.push({
+                    productId: prodId,
+                    quantity: qty,
+                    type: MovementType.TRANSFER_OUT,
+                    fromLocationId: fromLoc.id,
+                    toLocationId: toLoc.id,
+                    relatedFile: file ? file.name : 'Transferencia Masiva'
+                });
+                movementsToBatch.push({
                     productId: prodId,
                     quantity: qty,
                     type: MovementType.TRANSFER_IN,
                     fromLocationId: fromLoc.id,
                     toLocationId: toLoc.id,
-                    timestamp: new Date(),
-                    relatedFile: file ? file.name : 'Transferencia'
+                    relatedFile: file ? file.name : 'Transferencia Masiva'
                 });
+
+                stockAdjustments.push({ productId: prodId, locationId: fromLoc.id, quantityChange: -qty });
+                stockAdjustments.push({ productId: prodId, locationId: toLoc.id, quantityChange: qty });
             }
-            
-            setIsImportModalOpen(false);
-            if (errors.length > 0) {
-                addToast(`Transferencias procesadas con ${errors.length} errores.`, 'warning');
-            } else {
-                addToast('Todas las transferencias se procesaron con éxito.', 'success');
+
+            if (movementsToBatch.length === 0) {
+                addToast('No se encontraron movimientos válidos para procesar.', 'warning');
+                return;
+            }
+
+            try {
+                await addBulkMovements(movementsToBatch, stockAdjustments);
+                setIsImportModalOpen(false);
+                if (errors.length > 0) {
+                    addToast(`Procesado con ${errors.length} errores. Ver consola para detalles.`, 'warning');
+                    console.warn('Errores de importación:', errors);
+                } else {
+                    addToast(`¡Éxito! Se procesaron ${movementsToBatch.length / 2} transferencias correctamente.`, 'success');
+                }
+            } catch (err) {
+                addToast('Error crítico al procesar el lote de movimientos.', 'error');
             }
         };
 
@@ -559,14 +589,16 @@ const InventoryPage: React.FC = () => {
     const processSales = async (content: string, file?: File) => {
         const processData = async (data: any[]) => {
             const errors: string[] = [];
-            let successCount = 0;
+            const movementsToBatch: any[] = [];
+            const stockAdjustments: any[] = [];
             
             for (const item of data) {
                 // Mapeo de columnas según el nuevo formato: fecha(DD-MM-AAA); lugar; id_venta; precio
                 const fechaStr = String((item as any)['fecha'] || (item as any)['fecha(DD-MM-AAA)'] || (item as any)['timestamp'] || '');
-                const lugarStr = String((item as any)['lugar'] || '');
-                let idVenta = String((item as any)['id_venta'] || (item as any)['cod_venta'] || '');
+                const lugarStr = String((item as any)['lugar'] || (item as any)['tienda'] || '');
+                let idVenta = String((item as any)['id_venta'] || (item as any)['cod_venta'] || (item as any)['codigo'] || (item as any)['id_producto'] || '');
                 let precio = Number((item as any)['precio']) || 0;
+                let qty = Number((item as any)['qty'] || (item as any)['cantidad'] || 1);
 
                 // Si hay una columna extra, es probable que el formato sea: fecha;lugar;id_transaccion;id_venta;precio
                 const extra = (item as any)['__parsed_extra'];
@@ -583,40 +615,45 @@ const InventoryPage: React.FC = () => {
                     continue;
                 }
                 
-                const qty = 1;
-                let timestamp = new Date();
+                let timestamp = new Date().toISOString();
                 if (fechaStr) {
                     const parts = fechaStr.includes('-') ? fechaStr.split('-') : fechaStr.split('/');
                     if (parts.length === 3) {
                         const day = parseInt(parts[0], 10);
                         const month = parseInt(parts[1], 10) - 1;
                         const year = parseInt(parts[2], 10);
-                        timestamp = new Date(year, month, day);
+                        timestamp = new Date(year, month, day).toISOString();
                     }
                 }
                 
-                try {
-                    await updateStock(idVenta, loc.id, -qty);
-                    await addMovement({
-                        productId: idVenta,
-                        quantity: qty,
-                        type: MovementType.SALE,
-                        fromLocationId: loc.id,
-                        timestamp: timestamp,
-                        price: precio,
-                        relatedFile: file ? file.name : 'Venta'
-                    });
-                    successCount++;
-                } catch (err) {
-                    errors.push(`Error al procesar venta de ${idVenta}: ${err instanceof Error ? err.message : 'Error desconocido'}`);
-                }
+                movementsToBatch.push({
+                    productId: idVenta,
+                    quantity: qty,
+                    type: MovementType.SALE,
+                    fromLocationId: loc.id,
+                    timestamp: timestamp,
+                    price: precio,
+                    relatedFile: file ? file.name : 'Venta Masiva'
+                });
+
+                stockAdjustments.push({ productId: idVenta, locationId: loc.id, quantityChange: -qty });
             }
-            
-            setIsImportModalOpen(false);
-            if (errors.length > 0) {
-                addToast(`Se procesaron ${successCount} ventas. ${errors.length} errores.`, 'warning');
-            } else {
-                addToast(`¡Éxito! Se procesaron ${successCount} ventas correctamente.`, 'success');
+
+            if (movementsToBatch.length === 0) {
+                addToast('No se encontraron ventas válidas para procesar.', 'warning');
+                return;
+            }
+
+            try {
+                await addBulkMovements(movementsToBatch, stockAdjustments);
+                setIsImportModalOpen(false);
+                if (errors.length > 0) {
+                    addToast(`Procesado con ${errors.length} errores.`, 'warning');
+                } else {
+                    addToast(`¡Éxito! Se procesaron ${movementsToBatch.length} ventas correctamente.`, 'success');
+                }
+            } catch (err) {
+                addToast('Error al procesar el lote de ventas.', 'error');
             }
         };
 
