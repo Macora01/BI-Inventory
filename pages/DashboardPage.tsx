@@ -14,6 +14,8 @@ const DashboardPage: React.FC = () => {
 
     const COLORS = ['#A0522D', '#D2691E', '#CD853F', '#F4A460', '#DEB887', '#BC8F8F', '#8B4513'];
 
+    const IVA_CHILE = 1.19;
+
     const inventoryValue = useMemo(() => {
         if (!Array.isArray(stock) || !Array.isArray(products)) return 0;
         return stock.reduce((total, s) => {
@@ -30,7 +32,7 @@ const DashboardPage: React.FC = () => {
         }, 0);
     }, [stock, products]);
 
-    const potentialMargin = potentialRevenue - inventoryValue;
+    const potentialMargin = (potentialRevenue / IVA_CHILE) - inventoryValue;
     
     const totalUnits = useMemo(() => {
         if (!Array.isArray(stock)) return 0;
@@ -105,7 +107,7 @@ const DashboardPage: React.FC = () => {
                 m.type === 'SALE' && 
                 new Date(m.timestamp).toISOString().split('T')[0] === date
             );
-            const total = daySales.reduce((sum, s) => sum + (Number(s.price) || 0) * Number(s.quantity), 0);
+            const total = daySales.reduce((sum, s) => sum + (Number(s.price) || 0) * Number(s.quantity), 0) / IVA_CHILE;
             const displayDate = new Date(date).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' });
             return { date: displayDate, monto: total };
         });

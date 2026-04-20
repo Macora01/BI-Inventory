@@ -39,9 +39,11 @@ const Sidebar: React.FC = () => {
                 {logo ? (
                     <img src={logo} alt="Boa Ideia Logo" className="h-16 w-auto mb-4 object-contain max-h-16" />
                 ) : (
-                    <Zap className="text-secondary mb-2" size={40} />
+                    <>
+                        <Zap className="text-secondary mb-2" size={40} />
+                        <h1 className="text-2xl font-black italic tracking-tighter text-white">BOA IDEIA</h1>
+                    </>
                 )}
-                <h1 className="text-2xl font-black italic tracking-tighter text-white">BOA IDEIA</h1>
                 <p className="text-[10px] uppercase font-bold text-secondary tracking-widest mt-1 opacity-80">Inventory System</p>
             </div>
             

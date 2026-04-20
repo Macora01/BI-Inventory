@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.009",
+        date: "2026-04-20",
+        title: "IVA Chile & Admin Controls",
+        changes: [
+            "Ajuste de Margen (IVA): El Dashboard ahora considera el IVA de Chile (19%) en el cálculo de margen esperado y tendencias.",
+            "Restricción de Acceso: La función de 'Retorno Total a Bodega' ahora es exclusiva para administradores.",
+            "Refinamiento Visual: Eliminado el texto redundante 'BOA IDEIA' debajo de los logos para una estética más limpia.",
+            "Seguridad de Operaciones: Confirmación reforzada en procesos críticos de gestión de inventario."
+        ]
+    },
+    {
         version: "1.2.008",
         date: "2026-04-20",
         title: "Logo Fix & Total Return",
@@ -104,7 +115,7 @@ const SettingsPage: React.FC = () => {
         clearAllData, clearProducts, clearLocations, clearUsers,
         backupData, restoreData,
         dbStatus, checkHealth, loading,
-        logo, fetchLogo, returnAllToWarehouse
+        logo, fetchLogo, returnAllToWarehouse, currentUser
     } = useInventory();
     const { addToast } = useToast();
 
@@ -413,7 +424,7 @@ const SettingsPage: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {loc.id !== 'BODCENT' && (
+                                                {loc.id !== 'BODCENT' && currentUser?.role === 'admin' && (
                                                     <button onClick={() => handleReturnAll(loc)} className="text-primary hover:bg-primary/10 p-1.5 rounded-lg transition-colors" title="Retornar Todo a Bodega"><RotateCcw size={16}/></button>
                                                 )}
                                                 <button onClick={() => openLocationModal(loc)} className="text-secondary hover:bg-secondary/10 p-1.5 rounded-lg transition-colors" title="Editar"><Edit size={16}/></button>

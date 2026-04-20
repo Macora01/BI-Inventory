@@ -1,6 +1,6 @@
 /**
  * LoginPage.tsx
- * Version: 1.2.008
+ * Version: 1.2.009
  */
 import React, { useState } from 'react';
 import { useInventory } from '../context/InventoryContext';
