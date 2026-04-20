@@ -586,6 +586,41 @@ async function startServer() {
         }
     });
 
+    app.delete('/api/:entity/:id', async (req, res) => {
+        const { entity, id } = req.params;
+        if (!entities.includes(entity)) return res.status(404).json({ error: 'Invalid entity' });
+
+        const currentPool = getPool();
+        if (isPgActive && currentPool) {
+            try {
+                const idField = entity === 'products' ? 'id_venta' : 'id';
+                
+                if (entity === 'products') {
+                    // Limpiar stock para evitar errores de FK si existen
+                    await currentPool.query('DELETE FROM stock WHERE "productId" = $1', [id]);
+                }
+                
+                const result = await currentPool.query(`DELETE FROM ${entity} WHERE "${idField}" = $1`, [id]);
+                res.json({ success: true, deleted: result.rowCount });
+            } catch (err: any) {
+                res.status(500).json({ error: err.message });
+            }
+        } else {
+            const currentData = await readDataJson(entity, []);
+            const idField = entity === 'products' ? 'id_venta' : 'id';
+            const updatedData = currentData.filter((item: any) => item[idField] !== id);
+            await writeDataJson(entity, updatedData);
+            
+            if (entity === 'products') {
+                const stockData = await readDataJson('stock', []);
+                const updatedStock = stockData.filter((s: any) => s.productId !== id);
+                await writeDataJson('stock', updatedStock);
+            }
+            
+            res.json({ success: true });
+        }
+    });
+
     app.post('/api/:entity', async (req, res) => {
         const { entity } = req.params;
         const newItem = req.body;

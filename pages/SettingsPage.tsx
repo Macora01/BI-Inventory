@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.018",
+        date: "2026-04-20",
+        title: "Mantenimiento de Catálogo",
+        changes: [
+            "Eliminar Producto: Nueva opción en las acciones de la tabla para borrar productos individuales.",
+            "Limpieza de Integridad: Al eliminar un producto, el sistema limpia automáticamente sus registros de stock asociados.",
+            "Confirmación de Seguridad: Se agregó un diálogo de confirmación para evitar borrados accidentales."
+        ]
+    },
+    {
         version: "1.2.017",
         date: "2026-04-20",
         title: "Persistencia Multimedia",
