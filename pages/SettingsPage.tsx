@@ -10,6 +10,39 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.007",
+        date: "2026-04-20",
+        title: "BODCENT Scoring & Sales Groups",
+        changes: [
+            "Mejora de 'Smart Match': Búsqueda scoring-based para ubicaciones centrales (BODCEN/BODCENT).",
+            "Consolidación de Errores en Ventas: Ahora las ventas también agrupan errores por tipo y cantidad.",
+            "Persistencia Reforzada de Bodega: El backend asegura autoconfiguración de BODCENT si no existe.",
+            "Sincronización de Nombres: Mejorada la detección de 'Bodega' vs 'Almacén' en importaciones masivas."
+        ]
+    },
+    {
+        version: "1.2.006",
+        date: "2026-04-19",
+        title: "Smart Match y Consolidación",
+        changes: [
+            "Implementación de 'Smart Match': Búsqueda inteligente de ubicaciones por nombre, ID o fragmentos (ej: 'CEN' coincide con Central).",
+            "Consolidación de errores: Los fallos repetidos se agrupan en un resumen corto, eliminando las paredes de texto en notificaciones.",
+            "Persistencia forzada de BODCEN: El sistema asegura que la Bodega Central exista siempre con su ID estandarizado.",
+            "Mejora en Toasts: Resúmenes de carga masiva ahora muestran cuántas filas fallaron y por qué de forma agregada."
+        ]
+    },
+    {
+        version: "1.2.005",
+        date: "2026-04-19",
+        title: "Inteligencia de Datos y Alias",
+        changes: [
+            "Implementación de auto-alias para 'BODCEN' redirigiendo automáticamente a 'Bodega Central'.",
+            "Limpieza de mensajes de error de ubicación: ahora muestran nombres legibles en lugar de IDs técnicos.",
+            "Normalización profunda de encabezados en archivos Excel (.xlsx) y CSV.",
+            "Mejora en la búsqueda de ubicaciones (ahora busca por nombre e ID de forma insensible a mayúsculas/minúsculas)."
+        ]
+    },
+    {
         version: "1.2.001",
         date: "2026-04-19",
         title: "Mejoras de UI y Carga Masiva",

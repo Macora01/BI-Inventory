@@ -141,11 +141,11 @@ async function initDb() {
             `);
             console.log('PostgreSQL Tables initialized successfully');
 
-            // Insert default location if empty
-            const locationsCount = await client.query('SELECT count(*) FROM locations');
-            if (parseInt(locationsCount.rows[0].count) === 0) {
-                await client.query("INSERT INTO locations (id, name) VALUES ('main_warehouse', 'Bodega Central')");
-                console.log('Default location "Bodega Central" created.');
+            // Asegurar que exista la Bodega Central (BODCEN/BODCENT) para las importaciones masivas
+            const bodcenCheck = await client.query("SELECT id FROM locations WHERE id IN ('BODCEN', 'BODCENT') OR name ILIKE '%Bodega%' OR name ILIKE '%Central%' LIMIT 1");
+            if (bodcenCheck.rows.length === 0) {
+                await client.query("INSERT INTO locations (id, name, type) VALUES ('BODCENT', 'Bodega Central', 'FIXED_STORE_PERMANENT')");
+                console.log('Location "Bodega Central" (BODCENT) enforced.');
             }
 
             isPgActive = true;

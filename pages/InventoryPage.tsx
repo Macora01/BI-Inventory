@@ -1,6 +1,6 @@
 /**
  * InventoryPage.tsx
- * Version: 1.2.004
+ * Version: 1.2.007
  */
 import React, { useState, useMemo } from 'react';
 import Card from '../components/Card';
@@ -60,6 +60,38 @@ const InventoryPage: React.FC = () => {
     const [uploadingProductImage, setUploadingProductImage] = useState(false);
     const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
     
+    // Helper para buscar ubicaciones con lógica inteligente (usado en importaciones)
+    const findLoc = (searchName: string) => {
+        const sn = searchName.toLowerCase().trim();
+        if (!sn) return null;
+        
+        // 1. Exact Match (Nombre o ID)
+        let loc = locations.find(l => 
+            l.name.toLowerCase().trim() === sn ||
+            l.id.toLowerCase().trim() === sn
+        );
+        if (loc) return loc;
+
+        // 2. Intelligence for Central Warehouse (Bodega)
+        const centralTerms = ['bodcen', 'bodcent', 'bodega', 'central', 'bodega central', 'deposito', 'deposito central'];
+        if (centralTerms.includes(sn)) {
+            const fallback = locations.find(l => 
+                l.id.toUpperCase() === 'BODCEN' || 
+                l.id.toUpperCase() === 'BODCENT' ||
+                l.name.toLowerCase().includes('bodega') ||
+                l.name.toLowerCase().includes('central') ||
+                l.id.toLowerCase().includes('cen')
+            );
+            if (fallback) return fallback;
+        }
+
+        // 3. Fuzzy search: Start with, then contains
+        loc = locations.find(l => l.name.toLowerCase().startsWith(sn) || l.id.toLowerCase().startsWith(sn));
+        if (loc) return loc;
+
+        return locations.find(l => l.name.toLowerCase().includes(sn) || l.id.toLowerCase().includes(sn));
+    };
+
     // Estado para Ajuste de Stock
     const [adjustmentData, setAdjustmentData] = useState({
         productId: '',
@@ -490,7 +522,7 @@ const InventoryPage: React.FC = () => {
 
     const processTransfers = async (content: string, file?: File) => {
         const processData = async (data: any[]) => {
-            const errors: string[] = [];
+            const errorStats: Record<string, number> = {};
             const movementsToBatch: any[] = [];
             const stockAdjustments: any[] = [];
 
@@ -503,7 +535,7 @@ const InventoryPage: React.FC = () => {
                 }
                 return norm;
             };
-            
+
             for (const rawItem of data) {
                 const item = normalizeItem(rawItem);
                 const prodId = String(item.idventa || item.codigo || item.idproducto || item.id_venta || '');
@@ -511,33 +543,28 @@ const InventoryPage: React.FC = () => {
                 if (!prodId || qty <= 0) continue;
                 
                 // Validar existencia de ubicaciones
-                const fromLocName = String(item.sitioinicial || item.origen || item.inicial || item.sitio_inicial || '');
-                const toLocName = String(item.sitiofinal || item.destino || item.final || item.sitio_final || '');
+                const fromLocNameRaw = String(item.sitioinicial || item.origen || item.inicial || item.sitio_inicial || '');
+                const toLocNameRaw = String(item.sitiofinal || item.destino || item.final || item.sitio_final || '');
 
-                const fromLoc = locations.find(l => 
-                    l.name.toLowerCase().trim() === fromLocName.toLowerCase().trim() ||
-                    l.id.toLowerCase().trim() === fromLocName.toLowerCase().trim()
-                );
-                const toLoc = locations.find(l => 
-                    l.name.toLowerCase().trim() === toLocName.toLowerCase().trim() ||
-                    l.id.toLowerCase().trim() === toLocName.toLowerCase().trim()
-                );
+                const fromLoc = findLoc(fromLocNameRaw);
+                const toLoc = findLoc(toLocNameRaw);
                 
                 if (!fromLoc) {
-                    const available = locations.slice(0, 10).map(l => `${l.id} (${l.name})`).join(', ');
-                    errors.push(`Error: El sitio inicial "${fromLocName}" no existe. Disponibles: ${available}...`);
+                    const key = `El sitio "${fromLocNameRaw}" no existe.`;
+                    errorStats[key] = (errorStats[key] || 0) + 1;
                     continue;
                 }
                 if (!toLoc) {
-                    const available = locations.slice(0, 10).map(l => `${l.id} (${l.name})`).join(', ');
-                    errors.push(`Error: El sitio final "${toLocName}" no existe. Disponibles: ${available}...`);
+                    const key = `El sitio "${toLocNameRaw}" no existe.`;
+                    errorStats[key] = (errorStats[key] || 0) + 1;
                     continue;
                 }
                 
                 // Validar stock en sitio inicial
                 const currentStock = getStockForProductAndLocation(prodId, fromLoc.id);
                 if (currentStock < qty) {
-                    errors.push(`Error: Stock insuficiente para "${prodId}" en "${fromLocName}". Disponible: ${currentStock}, Requerido: ${qty}.`);
+                    const key = `Stock insuficiente p/ "${prodId}" en "${fromLoc.name}"`;
+                    errorStats[key] = (errorStats[key] || 0) + 1;
                     continue;
                 }
                 
@@ -564,8 +591,9 @@ const InventoryPage: React.FC = () => {
             }
 
             if (movementsToBatch.length === 0) {
-                if (errors.length > 0) {
-                    addToast(`No se procesó ningún movimiento. Errores:\n${errors.slice(0, 5).join('\n')}`, 'error');
+                const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
+                if (errorSummary) {
+                    addToast(`No se pudo procesar nada. Resumen de errores:\n${errorSummary}\n\nUbicaciones recomendadas: ${locations.slice(0, 10).map(l => l.name).join(', ')}`, 'error');
                 } else {
                     addToast('No se encontraron movimientos válidos para procesar.', 'warning');
                 }
@@ -575,9 +603,9 @@ const InventoryPage: React.FC = () => {
             try {
                 await addBulkMovements(movementsToBatch, stockAdjustments);
                 setIsImportModalOpen(false);
-                if (errors.length > 0) {
-                    addToast(`Procesado con ${errors.length} errores. Ver consola para detalles.`, 'warning');
-                    console.warn('Errores de importación:', errors);
+                const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
+                if (errorSummary) {
+                    addToast(`Carga completada con fallos parciales:\n${errorSummary}\n\nSe procesaron ${movementsToBatch.length / 2} transferencias.`, 'warning');
                 } else {
                     addToast(`¡Éxito! Se procesaron ${movementsToBatch.length / 2} transferencias correctamente.`, 'success');
                 }
@@ -611,7 +639,7 @@ const InventoryPage: React.FC = () => {
 
     const processSales = async (content: string, file?: File) => {
         const processData = async (data: any[]) => {
-            const errors: string[] = [];
+            const errorStats: Record<string, number> = {};
             const movementsToBatch: any[] = [];
             const stockAdjustments: any[] = [];
 
@@ -627,29 +655,25 @@ const InventoryPage: React.FC = () => {
             
             for (const rawItem of data) {
                 const item = normalizeItem(rawItem);
-                // Mapeo de columnas según el nuevo formato: fecha(DD-MM-AAA); lugar; id_venta; precio
                 const fechaStr = String(item.fecha || item['fecha(dd-mm-aaa)'] || item.timestamp || '');
-                const lugarStr = String(item.lugar || item.tienda || '');
+                const lugarStrRaw = String(item.lugar || item.tienda || '');
+                
                 let idVenta = String(item.idventa || item.codventa || item.codigo || item.idproducto || '');
                 let precio = Number(item.precio || item.price || 0);
                 let qty = Number(item.qty || item.cantidad || 1);
 
-                // Si hay una columna extra, es probable que el formato sea: fecha;lugar;id_transaccion;id_venta;precio
                 const extra = (item as any)['__parsed_extra'];
                 if (extra && extra.length === 1) {
                     idVenta = String((item as any)['precio']);
                     precio = Number(extra[0]) || 0;
                 }
 
-                if (!idVenta || !lugarStr) continue;
+                if (!idVenta || !lugarStrRaw) continue;
                 
-                const loc = locations.find(l => 
-                    l.name.toLowerCase() === lugarStr.toLowerCase() ||
-                    l.id.toLowerCase() === lugarStr.toLowerCase()
-                );
+                const loc = findLoc(lugarStrRaw);
                 if (!loc) {
-                    const available = locations.slice(0, 10).map(l => `${l.id} (${l.name})`).join(', ');
-                    errors.push(`Error: El lugar "${lugarStr}" no existe. Disponibles: ${available}...`);
+                    const key = `El lugar "${lugarStrRaw}" no existe.`;
+                    errorStats[key] = (errorStats[key] || 0) + 1;
                     continue;
                 }
                 
@@ -664,7 +688,7 @@ const InventoryPage: React.FC = () => {
                         timestamp = new Date(year, month, day).toISOString();
                     }
                 }
-                
+
                 movementsToBatch.push({
                     productId: idVenta,
                     quantity: qty,
@@ -679,10 +703,11 @@ const InventoryPage: React.FC = () => {
             }
 
             if (movementsToBatch.length === 0) {
-                if (errors.length > 0) {
-                    addToast(`No se procesó ninguna venta. Errores:\n${errors.slice(0, 3).join('\n')}`, 'error');
+                const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
+                if (errorSummary) {
+                    addToast(`No se procesó nada. Resumen de errores:\n${errorSummary}\n\nUbicaciones recomendadas: ${locations.slice(0, 10).map(l => l.name).join(', ')}`, 'error');
                 } else {
-                    addToast('No se encontraron ventas válidas para procesar.', 'warning');
+                    addToast('No se encontraron ventas válidas.', 'warning');
                 }
                 return;
             }
@@ -690,10 +715,11 @@ const InventoryPage: React.FC = () => {
             try {
                 await addBulkMovements(movementsToBatch, stockAdjustments);
                 setIsImportModalOpen(false);
-                if (errors.length > 0) {
-                    addToast(`Procesado con ${errors.length} errores.`, 'warning');
+                const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
+                if (errorSummary) {
+                    addToast(`Ventas cargadas con fallos parciales:\n${errorSummary}\n\nSe registraron ${movementsToBatch.length} ventas.`, 'warning');
                 } else {
-                    addToast(`¡Éxito! Se procesaron ${movementsToBatch.length} ventas correctamente.`, 'success');
+                    addToast(`¡Éxito! Se registraron ${movementsToBatch.length} ventas correctamente desde '${file?.name || 'archivo'}'.`, 'success');
                 }
             } catch (err) {
                 addToast('Error al procesar el lote de ventas.', 'error');
