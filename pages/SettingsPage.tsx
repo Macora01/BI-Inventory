@@ -10,6 +10,15 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.003",
+        title: "Corrección de Lógica de Visibilidad",
+        date: "2026-04-21",
+        changes: [
+            "Reversión de Filtros: Restaurada la lógica estrictamente solicitada: las ubicaciones con stock cero total en el sistema NO se muestran en la tabla principal.",
+            "Estabilidad de Trazabilidad: Corregido el error de importación que causaba la pantalla en blanco al buscar productos."
+        ]
+    },
+    {
         version: "1.3.002",
         title: "Robustez en Inventario y Almacenes",
         date: "2026-04-21",

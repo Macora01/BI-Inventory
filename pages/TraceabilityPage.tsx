@@ -4,7 +4,7 @@ import Button from '../components/Button';
 import { useInventory } from '../context/InventoryContext';
 import { Movement, MovementType } from '../types';
 import { MOVEMENT_TYPE_MAP } from '../constants';
-import { Camera } from 'lucide-react';
+import { Camera, AlertCircle, RefreshCw } from 'lucide-react';
 import QRScanner from '../components/QRScanner';
 import ProductImage from '../components/ProductImage';
 

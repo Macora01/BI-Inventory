@@ -141,11 +141,9 @@ const InventoryPage: React.FC = () => {
     // Filtrar ubicaciones que no tienen stock en ningún producto (para simplificar la tabla)
     // Y ordenar para que BOCENT aparezca primero, luego por cantidad total desc
     const activeLocations = useMemo(() => {
-        const filtered = locations.filter(loc => {
-            const idUpper = loc.id.toUpperCase();
-            const isMainWarehouse = idUpper === 'BODCENT' || idUpper === 'BODCEN' || idUpper.includes('CENTRAL') || loc.name.toUpperCase().includes('CENTRAL');
-            return isMainWarehouse || stock.some(s => s.locationId === loc.id && Number(s.quantity) !== 0);
-        });
+        const filtered = locations.filter(loc => 
+            stock.some(s => s.locationId === loc.id && Number(s.quantity) !== 0)
+        );
         
         const sorted = [...filtered].sort((a, b) => {
             const idA = a.id.toUpperCase();
