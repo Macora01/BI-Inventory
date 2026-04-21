@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.001",
+        title: "Integridad y Transparencia en Trazabilidad",
+        date: "2026-04-21",
+        changes: [
+            "Herramientas de Recuperación: Añadido botón 'REVERTIR' explícito en el historial de trazabilidad.",
+            "Corrección Automática: Implementado botón de sincronización directa para discrepancias de stock.",
+            "Visibilidad de Versión: Ahora la versión del sistema es visible en la barra lateral para seguimiento preciso.",
+            "Enfoque Global: El resumen de trazabilidad ahora ignora transferencias para evitar ruido en el conteo total."
+        ]
+    },
+    {
         version: "1.3.000",
         title: "Salto de Versión: Mejoras Visuales y Dashboard",
         date: "2026-04-21",

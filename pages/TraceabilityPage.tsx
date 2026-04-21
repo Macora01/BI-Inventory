@@ -19,7 +19,7 @@ const TraceabilityPage: React.FC = () => {
     const [traceabilityData, setTraceabilityData] = useState<TraceabilityData | null>(null);
     const [productNotFound, setProductNotFound] = useState(false);
     const [isScannerOpen, setIsScannerOpen] = useState(false);
-    const { movements, findProductById, locations, stock, revertMovements, addBulkMovements } = useInventory();
+    const { movements, findProductById, locations, stock, revertMovements, addBulkMovements, fetchData, fetchLogo, checkHealth } = useInventory();
 
     const handleSearch = () => {
         const product = findProductById(productId);
@@ -184,6 +184,10 @@ const TraceabilityPage: React.FC = () => {
                         </div>
                     </div>
                     <Button onClick={handleSearch}>Buscar</Button>
+                    <Button onClick={() => { fetchData(); fetchLogo(); checkHealth(); handleSearch(); }} variant="outline" className="flex items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                        Actualizar
+                    </Button>
                 </div>
             </Card>
 
@@ -236,15 +240,18 @@ const TraceabilityPage: React.FC = () => {
                                             {traceabilityData.currentStock}
                                         </p>
                                         {summary?.expectedStock !== traceabilityData.currentStock && (
-                                            <div className="mt-2 space-y-1">
-                                                <p className="text-[10px] text-danger font-bold uppercase">Discrepancia Detectada</p>
+                                            <div className="mt-2 p-2 bg-danger/10 border border-danger rounded space-y-2 animate-pulse">
+                                                <p className="text-[10px] text-danger font-black uppercase flex items-center gap-1">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                                                    ERROR DE CONTEO
+                                                </p>
                                                 <button 
                                                     onClick={() => handleSyncStock()}
-                                                    className="text-[10px] bg-danger text-white px-2 py-1 rounded hover:bg-danger/80 transition-colors font-bold flex items-center gap-1"
+                                                    className="w-full text-[10px] bg-danger text-white px-2 py-1.5 rounded hover:bg-danger/80 transition-all font-black flex items-center justify-center gap-1 shadow-sm"
                                                     title="Igualar el Stock Actual al Stock Esperado mediante un ajuste"
                                                 >
                                                     <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
-                                                    SINCRONIZAR
+                                                    CORREGIR AHORA
                                                 </button>
                                             </div>
                                         )}
@@ -295,10 +302,11 @@ const TraceabilityPage: React.FC = () => {
                                             {m.type !== MovementType.REVERSION && (
                                                 <button 
                                                     onClick={() => handleRevertMovement(m)}
-                                                    className="p-1 text-text-light hover:text-danger transition-colors"
+                                                    className="px-3 py-1 text-[10px] bg-white border border-danger text-danger hover:bg-danger hover:text-white transition-all rounded font-bold flex items-center gap-1 mx-auto"
                                                     title="Revertir este movimiento"
                                                 >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                                                    REVERTIR
                                                 </button>
                                             )}
                                         </td>

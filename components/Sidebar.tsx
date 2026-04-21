@@ -12,6 +12,7 @@ import {
 import { useHashNavigation } from '../hooks/useHashNavigation';
 import { User } from '../types';
 import { useInventory } from '../context/InventoryContext';
+import { APP_VERSION } from '../version';
 
 const navItems = [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/' },
@@ -44,7 +45,10 @@ const Sidebar: React.FC = () => {
                         <h1 className="text-2xl font-black italic tracking-tighter text-white">BOA IDEIA</h1>
                     </>
                 )}
-                <p className="text-[10px] uppercase font-bold text-secondary tracking-widest mt-1 opacity-80">Inventory System</p>
+                <div className="flex flex-col items-center">
+                    <p className="text-[10px] uppercase font-bold text-secondary tracking-widest mt-1 opacity-80">Inventory System</p>
+                    <span className="text-[9px] bg-white/10 text-white/50 px-2 mt-1 rounded font-mono">v{APP_VERSION}</span>
+                </div>
             </div>
             
             <nav className="flex-1 mt-6 px-4 space-y-1">
