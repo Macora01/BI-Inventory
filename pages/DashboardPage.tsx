@@ -6,6 +6,7 @@ import { DollarSign, Archive, AlertTriangle, Package, CheckCircle, RefreshCw, Tr
 import { analyzeInventoryData } from '../services/geminiService';
 import { GeminiInsight } from '../types';
 import Button from '../components/Button';
+import ProductImage from '../components/ProductImage';
 
 const DashboardPage: React.FC = () => {
     const { products, stock, movements, locations, loading, error, fetchData } = useInventory();
@@ -73,18 +74,24 @@ const DashboardPage: React.FC = () => {
     const topSellingProducts = useMemo(() => {
         if (!Array.isArray(movements) || !Array.isArray(products)) return [];
         const sales = movements.filter(m => m.type === 'SALE');
-        const salesByProduct = sales.reduce((acc, sale) => {
-            const product = products.find(p => p.id_venta === sale.productId);
-            if(product) {
-                acc[product.description] = (acc[product.description] || 0) + Number(sale.quantity);
-            }
+        
+        const salesByProductMap = sales.reduce((acc, sale) => {
+            acc[sale.productId] = (acc[sale.productId] || 0) + Number(sale.quantity);
             return acc;
         }, {} as Record<string, number>);
 
-        return (Object.entries(salesByProduct) as [string, number][])
+        return (Object.entries(salesByProductMap) as [string, number][])
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5)
-            .map(([name, ventas]) => ({ name, ventas }));
+            .map(([id, ventas]) => {
+                const product = products.find(p => p.id_venta === id);
+                return {
+                    id,
+                    name: product?.description || id,
+                    ventas,
+                    product
+                };
+            });
     }, [movements, products]);
 
     const stockDistribution = useMemo(() => {
@@ -143,6 +150,28 @@ const DashboardPage: React.FC = () => {
         } finally {
             setIsLoadingInsights(false);
         }
+    };
+
+    const CustomTooltip = ({ active, payload }: any) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            return (
+                <div className="bg-white p-3 border border-accent rounded-lg shadow-xl flex items-center space-x-3">
+                    <ProductImage 
+                        factoryId={data.product?.id_fabrica} 
+                        alt={data.name} 
+                        className="w-12 h-12 rounded shadow-sm border border-accent/20" 
+                        image={data.product?.image}
+                    />
+                    <div>
+                        <p className="font-bold text-primary text-sm">{data.name}</p>
+                        <p className="text-[10px] text-text-light font-mono mb-1">{data.id}</p>
+                        <p className="text-xs font-black text-secondary">Ventas: {data.ventas}</p>
+                    </div>
+                </div>
+            );
+        }
+        return null;
     };
 
     if (loading) return <div className="p-12 text-center text-text-light italic">Cargando tablero...</div>;
@@ -214,7 +243,7 @@ const DashboardPage: React.FC = () => {
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                 <XAxis dataKey="name" hide />
                                 <YAxis />
-                                <Tooltip />
+                                <Tooltip content={<CustomTooltip />} />
                                 <Bar dataKey="ventas" fill="#A0522D" radius={[4, 4, 0, 0]} />
                             </BarChart>
                         </ResponsiveContainer>

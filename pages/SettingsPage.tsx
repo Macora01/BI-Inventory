@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.000",
+        title: "Salto de Versión: Mejoras Visuales y Dashboard",
+        date: "2026-04-21",
+        changes: [
+            "Dashboard Interactivo: El gráfico de los más vendidos ahora muestra el código y la imagen del producto al pasar el ratón.",
+            "Consolidación de Mejoras: Se alcanza un hito importante en la estabilidad y usabilidad del sistema.",
+            "Limpieza de Datos: Optimizada la integridad referencial al eliminar ubicaciones o productos."
+        ]
+    },
+    {
         version: "1.2.022",
         title: "Corrección Crítica de Stock y Mejoras UI",
         date: "2026-04-21",
