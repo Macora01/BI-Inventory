@@ -202,9 +202,9 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
                 for (const sa of stockAdjustments) {
                     const idx = newStock.findIndex(s => s.productId === sa.productId && s.locationId === sa.locationId);
                     if (idx > -1) {
-                        newStock[idx] = { ...newStock[idx], quantity: Number(newStock[idx].quantity) + sa.quantityChange };
+                        newStock[idx] = { ...newStock[idx], quantity: Number(newStock[idx].quantity) + Number(sa.quantityChange) };
                     } else {
-                        newStock.push({ productId: sa.productId, locationId: sa.locationId, quantity: sa.quantityChange });
+                        newStock.push({ productId: sa.productId, locationId: sa.locationId, quantity: Number(sa.quantityChange) });
                     }
                 }
                 return newStock;
@@ -299,10 +299,10 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
                 const stockIndex = prevStock.findIndex(s => s.productId === productId && s.locationId === locationId);
                 if (stockIndex > -1) {
                     const newStock = [...prevStock];
-                    newStock[stockIndex] = { ...newStock[stockIndex], quantity: newStock[stockIndex].quantity + quantityChange };
+                    newStock[stockIndex] = { ...newStock[stockIndex], quantity: Number(newStock[stockIndex].quantity) + Number(quantityChange) };
                     return newStock;
                 } else if (quantityChange > 0) {
-                    return [...prevStock, { productId, locationId, quantity: quantityChange }];
+                    return [...prevStock, { productId, locationId, quantity: Number(quantityChange) }];
                 }
                 return prevStock;
             });

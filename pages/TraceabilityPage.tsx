@@ -28,15 +28,16 @@ const TraceabilityPage: React.FC = () => {
                 .filter(m => m.productId === productId)
                 .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
             
-            const initialStockMovement = history.find(m => m.type === MovementType.INITIAL_LOAD);
-            const initialStock = initialStockMovement ? initialStockMovement.quantity : 0;
+            const initialStock = history
+                .filter(m => m.type === MovementType.INITIAL_LOAD)
+                .reduce((sum, m) => sum + Number(m.quantity), 0);
 
             const currentStock = stock
                 .filter(s => s.productId === productId)
                 .reduce((sum, s) => sum + Number(s.quantity), 0);
 
             setTraceabilityData({
-                history: history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+                history: [...history].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
                 initialStock,
                 currentStock
             });
@@ -58,15 +59,16 @@ const TraceabilityPage: React.FC = () => {
                 .filter(m => m.productId === upperCode)
                 .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
             
-            const initialStockMovement = history.find(m => m.type === MovementType.INITIAL_LOAD);
-            const initialStock = initialStockMovement ? initialStockMovement.quantity : 0;
+            const initialStock = history
+                .filter(m => m.type === MovementType.INITIAL_LOAD)
+                .reduce((sum, m) => sum + Number(m.quantity), 0);
 
             const currentStock = stock
                 .filter(s => s.productId === upperCode)
                 .reduce((sum, s) => sum + Number(s.quantity), 0);
 
             setTraceabilityData({
-                history: history.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+                history: [...history].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
                 initialStock,
                 currentStock
             });
@@ -76,6 +78,31 @@ const TraceabilityPage: React.FC = () => {
             setProductNotFound(true);
         }
     };
+
+    // Cálculos para el resumen detallado
+    const summary = React.useMemo(() => {
+        if (!traceabilityData) return null;
+        
+        // Entradas (excluyendo carga inicial ya que es el punto de partida para el usuario usualmente, 
+        // pero para auditoría total sumamos todo lo que NO es inicial y es positivo)
+        const entries = traceabilityData.history
+            .filter(m => {
+                const isPositive = !(m.type === MovementType.SALE || m.type === MovementType.TRANSFER_OUT || (m.type === MovementType.ADJUSTMENT && m.fromLocationId && !m.toLocationId));
+                return isPositive && m.type !== MovementType.INITIAL_LOAD;
+            })
+            .reduce((sum, m) => sum + Number(m.quantity), 0);
+
+        const exits = traceabilityData.history
+            .filter(m => (m.type === MovementType.SALE || m.type === MovementType.TRANSFER_OUT || (m.type === MovementType.ADJUSTMENT && m.fromLocationId && !m.toLocationId)))
+            .reduce((sum, m) => sum + Number(m.quantity), 0);
+
+        const expectedStock = traceabilityData.initialStock + entries - exits;
+        const totalSales = traceabilityData.history
+            .filter(m => m.type === MovementType.SALE)
+            .reduce((sum, m) => sum + Number(m.quantity), 0);
+
+        return { entries, exits, expectedStock, totalSales };
+    }, [traceabilityData]);
 
     return (
         <div className="space-y-6">
@@ -134,16 +161,33 @@ const TraceabilityPage: React.FC = () => {
                             />
                         </div>
                         <div className="flex-1">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 p-4 bg-background rounded-md border border-accent h-full items-center">
-                                <div>
-                                    <p className="text-sm text-text-light">Stock Inicial</p>
-                                    <p className="text-2xl font-bold text-primary">{traceabilityData.initialStock}</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6 p-4 bg-background rounded-md border border-accent h-full items-center">
+                                    <div>
+                                        <p className="text-xs text-text-light uppercase font-bold">Stock Inicial</p>
+                                        <p className="text-xl font-bold text-primary">{traceabilityData.initialStock}</p>
+                                    </div>
+                                    <div className="border-l border-accent pl-4">
+                                        <p className="text-xs text-text-light uppercase font-bold">Entradas</p>
+                                        <p className="text-xl font-bold text-success">+{summary?.entries || 0}</p>
+                                    </div>
+                                    <div className="border-l border-accent pl-4">
+                                        <p className="text-xs text-text-light uppercase font-bold">Salidas/Ventas</p>
+                                        <p className="text-xl font-bold text-danger">-{summary?.exits || 0}</p>
+                                    </div>
+                                    <div className="border-l border-accent pl-4 bg-accent/5 p-2 rounded">
+                                        <p className="text-xs text-text-light uppercase font-bold">Stock Esperado</p>
+                                        <p className="text-xl font-black text-primary">{summary?.expectedStock || 0}</p>
+                                    </div>
+                                    <div className="border-l border-accent pl-4 bg-secondary/5 p-2 rounded">
+                                        <p className="text-xs text-text-light uppercase font-bold">Stock Actual</p>
+                                        <p className={`text-xl font-black ${(summary?.expectedStock !== traceabilityData.currentStock) ? 'text-danger animate-pulse' : 'text-secondary'}`}>
+                                            {traceabilityData.currentStock}
+                                        </p>
+                                        {summary?.expectedStock !== traceabilityData.currentStock && (
+                                            <p className="text-[10px] text-danger font-bold">DISCREPANCIA DETECTADA</p>
+                                        )}
+                                    </div>
                                 </div>
-                                <div>
-                                    <p className="text-sm text-text-light">Stock Actual</p>
-                                    <p className="text-2xl font-bold text-secondary">{traceabilityData.currentStock}</p>
-                                </div>
-                            </div>
                         </div>
                     </div>
                     <div className="overflow-x-auto max-h-screen">

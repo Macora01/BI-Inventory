@@ -340,29 +340,35 @@ const InventoryPage: React.FC = () => {
         }
 
         try {
-            // Descontar de origen
-            await updateStock(transferData.productId, transferData.fromLocationId, -transferData.quantity);
-            // Sumar a destino
-            await updateStock(transferData.productId, transferData.toLocationId, transferData.quantity);
-            
-            // Registrar Movimientos
-            await addMovement({
-                productId: transferData.productId,
-                quantity: transferData.quantity,
-                type: MovementType.TRANSFER_OUT,
-                fromLocationId: transferData.fromLocationId,
-                toLocationId: transferData.toLocationId,
-                relatedFile: `Transferencia Manual: ${transferData.reason}`
-            });
-
-            await addMovement({
-                productId: transferData.productId,
-                quantity: transferData.quantity,
-                type: MovementType.TRANSFER_IN,
-                fromLocationId: transferData.fromLocationId,
-                toLocationId: transferData.toLocationId,
-                relatedFile: `Transferencia Manual: ${transferData.reason}`
-            });
+            await addBulkMovements([
+                {
+                    productId: transferData.productId,
+                    quantity: transferData.quantity,
+                    type: MovementType.TRANSFER_OUT,
+                    fromLocationId: transferData.fromLocationId,
+                    toLocationId: transferData.toLocationId,
+                    relatedFile: `Transferencia Manual: ${transferData.reason}`
+                },
+                {
+                    productId: transferData.productId,
+                    quantity: transferData.quantity,
+                    type: MovementType.TRANSFER_IN,
+                    fromLocationId: transferData.fromLocationId,
+                    toLocationId: transferData.toLocationId,
+                    relatedFile: `Transferencia Manual: ${transferData.reason}`
+                }
+            ], [
+                {
+                    productId: transferData.productId,
+                    locationId: transferData.fromLocationId,
+                    quantityChange: -transferData.quantity
+                },
+                {
+                    productId: transferData.productId,
+                    locationId: transferData.toLocationId,
+                    quantityChange: transferData.quantity
+                }
+            ]);
 
             addToast('Transferencia realizada con éxito.', 'success');
             setIsTransferModalOpen(false);
@@ -1028,7 +1034,7 @@ const InventoryPage: React.FC = () => {
                                             totalStock < (product.minStock ?? 2) ? 'bg-red-100 text-red-900 border-red-200' : 
                                             'bg-accent/30 text-primary border-accent/20'
                                         }`}>
-                                            {totalStock + (salesByProduct[product.id_venta] || 0)}
+                                            {totalStock}
                                         </td>
                                         <td className="px-4 py-4 text-center font-medium text-secondary bg-secondary/5">
                                             {salesByProduct[product.id_venta] || 0}
