@@ -589,31 +589,6 @@ const SettingsPage: React.FC = () => {
                 </div>
             </Card>
 
-            <Card title="Historial de Versiones (Changelog)">
-                <div className="p-4 space-y-6">
-                    {CHANGELOG.map((release, idx) => (
-                        <div key={release.version} className={`relative pl-8 ${idx !== CHANGELOG.length - 1 ? 'border-l-2 border-accent pb-6 ml-2' : 'ml-2'}`}>
-                            <div className="absolute -left-[11px] top-0 w-5 h-5 rounded-full bg-accent border-4 border-white shadow-sm"></div>
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
-                                <h4 className="font-bold text-primary flex items-center">
-                                    v{release.version} - {release.title}
-                                    {idx === 0 && <span className="ml-3 text-[10px] bg-success text-white px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Actual</span>}
-                                </h4>
-                                <span className="text-xs font-mono text-text-light">{release.date}</span>
-                            </div>
-                            <ul className="space-y-1">
-                                {release.changes.map((change, cIdx) => (
-                                    <li key={cIdx} className="text-sm text-text-main flex items-start">
-                                        <span className="text-accent mr-2">•</span>
-                                        {change}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    ))}
-                </div>
-            </Card>
-
             <Card title="Gestión de Datos (Respaldo y Limpieza)">
                 <div className="space-y-6 p-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-accent pb-6">
@@ -703,6 +678,31 @@ const SettingsPage: React.FC = () => {
                             )}
                         </div>
                     </div>
+                </div>
+            </Card>
+
+            <Card title="Historial de Versiones (Changelog)">
+                <div className="p-4 space-y-6">
+                    {CHANGELOG.map((release, idx) => (
+                        <div key={release.version} className={`relative pl-8 ${idx !== CHANGELOG.length - 1 ? 'border-l-2 border-accent pb-6 ml-2' : 'ml-2'}`}>
+                            <div className="absolute -left-[11px] top-0 w-5 h-5 rounded-full bg-accent border-4 border-white shadow-sm"></div>
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2">
+                                <h4 className="font-bold text-primary flex items-center">
+                                    v{release.version} - {release.title}
+                                    {idx === 0 && <span className="ml-3 text-[10px] bg-success text-white px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">Actual</span>}
+                                </h4>
+                                <span className="text-xs font-mono text-text-light">{release.date}</span>
+                            </div>
+                            <ul className="space-y-1">
+                                {release.changes.map((change, cIdx) => (
+                                    <li key={cIdx} className="text-sm text-text-main flex items-start">
+                                        <span className="text-accent mr-2">•</span>
+                                        {change}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ))}
                 </div>
             </Card>
 

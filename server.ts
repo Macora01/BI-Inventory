@@ -297,15 +297,18 @@ async function startServer() {
                     await currentPool.query(`INSERT INTO movements (${quotedKeys}) VALUES (${placeholders})`, Object.values(revMovement));
 
                     // Actualizar Stock
-                    // Si el original movía de A a B: Stock A-, Stock B+
-                    // La reversión debe hacer: Stock A+, Stock B-
-                    if (m.fromLocationId) {
+                    // Ajuste de lógica: Para evitar duplicidad en transferencias (que vienen en pares OUT/IN),
+                    // cada tipo de movimiento revierte solo su parte del stock.
+                    const affectsFrom = ['TRANSFER_OUT', 'SALE', 'ADJUSTMENT', 'REVERSION'].includes(m.type);
+                    const affectsTo = ['TRANSFER_IN', 'INITIAL_LOAD', 'PRODUCT_ADDITION', 'ADJUSTMENT', 'REVERSION'].includes(m.type);
+
+                    if (m.fromLocationId && affectsFrom) {
                         await currentPool.query(`
                             INSERT INTO stock ("productId", "locationId", quantity) VALUES ($1, $2, $3)
                             ON CONFLICT ("productId", "locationId") DO UPDATE SET quantity = stock.quantity + $3
                         `, [m.productId, m.fromLocationId, m.quantity]);
                     }
-                    if (m.toLocationId) {
+                    if (m.toLocationId && affectsTo) {
                         await currentPool.query(`
                             INSERT INTO stock ("productId", "locationId", quantity) VALUES ($1, $2, $3)
                             ON CONFLICT ("productId", "locationId") DO UPDATE SET quantity = stock.quantity - $3
@@ -344,12 +347,15 @@ async function startServer() {
                 
                 movementsData.unshift(revMovement);
                 
-                if (m.fromLocationId) {
+                const affectsFrom = ['TRANSFER_OUT', 'SALE', 'ADJUSTMENT', 'REVERSION'].includes(m.type);
+                const affectsTo = ['TRANSFER_IN', 'INITIAL_LOAD', 'PRODUCT_ADDITION', 'ADJUSTMENT', 'REVERSION'].includes(m.type);
+
+                if (m.fromLocationId && affectsFrom) {
                     const idx = stockData.findIndex((s: any) => s.productId === m.productId && s.locationId === m.fromLocationId);
                     if (idx > -1) stockData[idx].quantity = Number(stockData[idx].quantity) + Number(m.quantity);
                     else stockData.push({ productId: m.productId, locationId: m.fromLocationId, quantity: m.quantity });
                 }
-                if (m.toLocationId) {
+                if (m.toLocationId && affectsTo) {
                     const idx = stockData.findIndex((s: any) => s.productId === m.productId && s.locationId === m.toLocationId);
                     if (idx > -1) stockData[idx].quantity = Number(stockData[idx].quantity) - Number(m.quantity);
                     else stockData.push({ productId: m.productId, locationId: m.toLocationId, quantity: -m.quantity });
