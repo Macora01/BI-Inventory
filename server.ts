@@ -709,7 +709,7 @@ async function startServer() {
                 
                 if (entity === 'locations') {
                     await currentPool.query('DELETE FROM stock WHERE "locationId" = $1', [id]);
-                    await currentPool.query('DELETE FROM movements WHERE "fromLocationId" = $1 OR "toLocationId" = $1', [id]);
+                    // No eliminamos los movimientos para mantener la trazabilidad histórica
                 }
                 
                 const result = await currentPool.query(`DELETE FROM ${entity} WHERE "${idField}" = $1`, [id]);
@@ -732,9 +732,8 @@ async function startServer() {
             
             if (entity === 'locations') {
                 const stockData = await readDataJson('stock', []);
-                const movementsData = await readDataJson('movements', []);
                 await writeDataJson('stock', stockData.filter((s: any) => s.locationId !== id));
-                await writeDataJson('movements', movementsData.filter((m: any) => m.fromLocationId !== id && m.toLocationId !== id));
+                // No eliminamos movimientos en modo JSON tampoco
             }
             
             res.json({ success: true });

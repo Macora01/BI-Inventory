@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.002",
+        title: "Robustez en Inventario y Almacenes",
+        date: "2026-04-21",
+        changes: [
+            "Protección de Almacenes: Las bodegas centrales ahora son siempre visibles en el inventario, evitando que 'desaparezcan' al llegar a stock cero.",
+            "Integridad Histórica: El borrado de ubicaciones ya no elimina el historial de movimientos, preservando la trazabilidad de por vida.",
+            "Filtro de Reversiones: Se restringe la reversión de ajustes de sistema para prevenir bucles de corrección infinitos.",
+            "Mejora Visual: Iconografía actualizada en la página de trazabilidad para mayor claridad."
+        ]
+    },
+    {
         version: "1.3.001",
         title: "Integridad y Transparencia en Trazabilidad",
         date: "2026-04-21",
