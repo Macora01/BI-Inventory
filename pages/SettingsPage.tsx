@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.022",
+        title: "Corrección Crítica de Stock y Mejoras UI",
+        date: "2026-04-21",
+        changes: [
+            "Corregido error crítico de concatenación de stock en modo JSON (agregado de dígitos).",
+            "Mejorada la experiencia de edición rápida de stock en la tabla (auto-selección y feedback visual).",
+            "Implementada limpieza automática de stock y movimientos al eliminar ubicaciones.",
+            "Optimización de estabilidad en transferencias masivas."
+        ]
+    },
+    {
         version: "1.2.020",
         date: "2026-04-21",
         title: "Sistema de Reversión e Historial",

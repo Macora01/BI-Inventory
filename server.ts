@@ -462,7 +462,7 @@ async function startServer() {
                 if (idx > -1) {
                     stockData[idx].quantity = Number(stockData[idx].quantity) + Number(sa.quantityChange);
                 } else {
-                    stockData.push({ productId: sa.productId, locationId: sa.locationId, quantity: sa.quantityChange });
+                    stockData.push({ productId: sa.productId, locationId: sa.locationId, quantity: Number(sa.quantityChange) });
                 }
             }
             
@@ -493,8 +493,8 @@ async function startServer() {
             const stockData = await readDataJson('stock', []);
             const index = stockData.findIndex((s: any) => s.productId === productId && s.locationId === locationId);
             if (index > -1) {
-                stockData[index].quantity += Number(quantityChange);
-            } else if (quantityChange > 0) {
+                stockData[index].quantity = Number(stockData[index].quantity) + Number(quantityChange);
+            } else {
                 stockData.push({ productId, locationId, quantity: Number(quantityChange) });
             }
             await writeDataJson('stock', stockData);
@@ -701,8 +701,13 @@ async function startServer() {
                 const idField = entity === 'products' ? 'id_venta' : 'id';
                 
                 if (entity === 'products') {
-                    // Limpiar stock para evitar errores de FK si existen
                     await currentPool.query('DELETE FROM stock WHERE "productId" = $1', [id]);
+                    await currentPool.query('DELETE FROM movements WHERE "productId" = $1', [id]);
+                }
+                
+                if (entity === 'locations') {
+                    await currentPool.query('DELETE FROM stock WHERE "locationId" = $1', [id]);
+                    await currentPool.query('DELETE FROM movements WHERE "fromLocationId" = $1 OR "toLocationId" = $1', [id]);
                 }
                 
                 const result = await currentPool.query(`DELETE FROM ${entity} WHERE "${idField}" = $1`, [id]);
@@ -718,8 +723,16 @@ async function startServer() {
             
             if (entity === 'products') {
                 const stockData = await readDataJson('stock', []);
-                const updatedStock = stockData.filter((s: any) => s.productId !== id);
-                await writeDataJson('stock', updatedStock);
+                const movementsData = await readDataJson('movements', []);
+                await writeDataJson('stock', stockData.filter((s: any) => s.productId !== id));
+                await writeDataJson('movements', movementsData.filter((m: any) => m.productId !== id));
+            }
+            
+            if (entity === 'locations') {
+                const stockData = await readDataJson('stock', []);
+                const movementsData = await readDataJson('movements', []);
+                await writeDataJson('stock', stockData.filter((s: any) => s.locationId !== id));
+                await writeDataJson('movements', movementsData.filter((m: any) => m.fromLocationId !== id && m.toLocationId !== id));
             }
             
             res.json({ success: true });

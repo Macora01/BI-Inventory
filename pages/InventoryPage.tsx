@@ -993,7 +993,7 @@ const InventoryPage: React.FC = () => {
                                             return (
                                                 <td 
                                                     key={loc.id} 
-                                                    className={`px-4 py-4 text-center cursor-pointer border-x border-gray-100 transition-all duration-200 ${isEditing ? 'bg-white ring-2 ring-primary ring-inset' : cellBg}`}
+                                                    className={`px-4 py-4 text-center cursor-pointer border-x border-gray-100 transition-all duration-200 group relative ${isEditing ? 'bg-white ring-2 ring-primary ring-inset' : cellBg}`}
                                                     onClick={() => {
                                                         if (!isEditing) {
                                                             setEditingCell({ productId: product.id_venta, locationId: loc.id });
@@ -1008,6 +1008,7 @@ const InventoryPage: React.FC = () => {
                                                             className="w-full bg-transparent text-center font-bold outline-none"
                                                             value={editValue}
                                                             onChange={(e) => setEditValue(e.target.value)}
+                                                            onFocus={(e) => e.target.select()}
                                                             onBlur={() => handleInlineEdit(product.id_venta, loc.id, parseInt(editValue) || 0)}
                                                             onKeyDown={(e) => {
                                                                 if (e.key === 'Enter') handleInlineEdit(product.id_venta, loc.id, parseInt(editValue) || 0);
@@ -1015,7 +1016,10 @@ const InventoryPage: React.FC = () => {
                                                             }}
                                                         />
                                                     ) : (
-                                                        <span className={qty === 0 ? "text-text-light/30 text-xs" : "font-bold"}>{qty}</span>
+                                                        <div className="flex flex-col items-center justify-center group-hover:scale-110 transition-transform">
+                                                            <span className={qty === 0 ? "text-text-light/30 text-xs" : "font-bold"}>{qty}</span>
+                                                            <Edit size={8} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-primary transition-opacity" />
+                                                        </div>
                                                     )}
                                                 </td>
                                             );
