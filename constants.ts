@@ -7,6 +7,7 @@ export const MOVEMENT_TYPE_MAP: Record<MovementType, string> = {
     [MovementType.TRANSFER_OUT]: 'Salida de Transferencia',
     [MovementType.SALE]: 'Venta',
     [MovementType.ADJUSTMENT]: 'Ajuste de Inventario',
+    [MovementType.REVERSION]: 'Reversión (Undo)',
 };
 
 export const INITIAL_LOCATIONS: Omit<Location, 'id'>[] = [

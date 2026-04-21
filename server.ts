@@ -263,6 +263,105 @@ async function startServer() {
         });
     });
 
+    // Revert Movements (Bulk)
+    app.post('/api/movements/revert', async (req, res) => {
+        const { movements } = req.body; // Array of full movement objects to revert
+        const currentPool = getPool();
+        
+        if (isPgActive && currentPool) {
+            try {
+                await currentPool.query('BEGIN');
+                
+                for (const m of movements) {
+                    const id = `rev-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                    const timestamp = new Date().toISOString();
+                    
+                    // Crear el movimiento de reversión
+                    // Invertimos las ubicaciones: lo que era origen ahora es destino, y viceversa
+                    const revMovement = {
+                        id,
+                        productId: m.productId,
+                        quantity: m.quantity,
+                        type: 'REVERSION',
+                        fromLocationId: m.toLocationId,
+                        toLocationId: m.fromLocationId,
+                        timestamp,
+                        relatedFile: `Reversión de ${m.relatedFile || m.id}`,
+                        price: m.price || 0,
+                        cost: m.cost || 0
+                    };
+
+                    const keys = Object.keys(revMovement);
+                    const quotedKeys = keys.map(k => `"${k}"`).join(',');
+                    const placeholders = keys.map((_, i) => `$${i + 1}`).join(',');
+                    await currentPool.query(`INSERT INTO movements (${quotedKeys}) VALUES (${placeholders})`, Object.values(revMovement));
+
+                    // Actualizar Stock
+                    // Si el original movía de A a B: Stock A-, Stock B+
+                    // La reversión debe hacer: Stock A+, Stock B-
+                    if (m.fromLocationId) {
+                        await currentPool.query(`
+                            INSERT INTO stock ("productId", "locationId", quantity) VALUES ($1, $2, $3)
+                            ON CONFLICT ("productId", "locationId") DO UPDATE SET quantity = stock.quantity + $3
+                        `, [m.productId, m.fromLocationId, m.quantity]);
+                    }
+                    if (m.toLocationId) {
+                        await currentPool.query(`
+                            INSERT INTO stock ("productId", "locationId", quantity) VALUES ($1, $2, $3)
+                            ON CONFLICT ("productId", "locationId") DO UPDATE SET quantity = stock.quantity - $3
+                        `, [m.productId, m.toLocationId, m.quantity]);
+                    }
+                }
+                
+                await currentPool.query('COMMIT');
+                res.json({ success: true });
+            } catch (err: any) {
+                await currentPool.query('ROLLBACK').catch(() => {});
+                console.error('Error in revert movements:', err);
+                res.status(500).json({ error: err.message });
+            }
+        } else {
+            // Fallback JSON mode
+            const movementsData = await readDataJson('movements', []);
+            const stockData = await readDataJson('stock', []);
+            
+            for (const m of movements) {
+                const id = `rev-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                const timestamp = new Date().toISOString();
+                
+                const revMovement = {
+                    id,
+                    productId: m.productId,
+                    quantity: m.quantity,
+                    type: 'REVERSION',
+                    fromLocationId: m.toLocationId,
+                    toLocationId: m.fromLocationId,
+                    timestamp,
+                    relatedFile: `Reversión de ${m.relatedFile || m.id}`,
+                    price: m.price || 0,
+                    cost: m.cost || 0
+                };
+                
+                movementsData.unshift(revMovement);
+                
+                if (m.fromLocationId) {
+                    const idx = stockData.findIndex((s: any) => s.productId === m.productId && s.locationId === m.fromLocationId);
+                    if (idx > -1) stockData[idx].quantity = Number(stockData[idx].quantity) + Number(m.quantity);
+                    else stockData.push({ productId: m.productId, locationId: m.fromLocationId, quantity: m.quantity });
+                }
+                if (m.toLocationId) {
+                    const idx = stockData.findIndex((s: any) => s.productId === m.productId && s.locationId === m.toLocationId);
+                    if (idx > -1) stockData[idx].quantity = Number(stockData[idx].quantity) - Number(m.quantity);
+                    else stockData.push({ productId: m.productId, locationId: m.toLocationId, quantity: -m.quantity });
+                }
+            }
+            
+            await writeDataJson('movements', movementsData);
+            await writeDataJson('stock', stockData);
+            res.json({ success: true });
+        }
+    });
+
     // Bulk Import for Initial Inventory (Moved UP to avoid shadowing by /api/:entity)
     app.post('/api/bulk-import', async (req, res) => {
         const { products, stock, movements } = req.body;

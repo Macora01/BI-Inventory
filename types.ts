@@ -30,7 +30,8 @@ export enum MovementType {
   TRANSFER_IN = 'TRANSFER_IN',
   TRANSFER_OUT = 'TRANSFER_OUT',
   SALE = 'SALE',
-  ADJUSTMENT = 'ADJUSTMENT'
+  ADJUSTMENT = 'ADJUSTMENT',
+  REVERSION = 'REVERSION'
 }
 
 export interface Movement {

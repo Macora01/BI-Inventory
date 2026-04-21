@@ -1,3 +1,7 @@
+/**
+ * ReportsPage.tsx
+ * Version: 1.2.020
+ */
 import React, { useState } from 'react';
 import { useInventory } from '../context/InventoryContext';
 import Card from '../components/Card';
@@ -75,20 +79,33 @@ const ReportsPage: React.FC = () => {
             const pid = m.productId;
             if (!results[pid]) results[pid] = 0;
 
-            const isTargetLocation = selectedLocationId === 'all' || m.fromLocationId === selectedLocationId || m.toLocationId === selectedLocationId;
-            if (!isTargetLocation) return;
-
             if (selectedLocationId === 'all') {
+                // Lógica Global: Considerar lo que entra/sale del sistema total
                 if (m.type === MovementType.INITIAL_LOAD || m.type === MovementType.PRODUCT_ADDITION) {
                     results[pid] += m.quantity;
                 } else if (m.type === MovementType.SALE) {
                     results[pid] -= m.quantity;
+                } else if (m.type === MovementType.REVERSION) {
+                    // Si la reversión añade stock al sistema (anula venta)
+                    if (m.toLocationId && !m.fromLocationId) results[pid] += m.quantity;
+                    // Si la reversión quita stock del sistema (anula carga)
+                    if (m.fromLocationId && !m.toLocationId) results[pid] -= m.quantity;
+                } else if (m.type === MovementType.ADJUSTMENT) {
+                    if (m.toLocationId && !m.fromLocationId) results[pid] += m.quantity;
+                    if (m.fromLocationId && !m.toLocationId) results[pid] -= m.quantity;
                 }
             } else {
-                if (m.toLocationId === selectedLocationId) {
+                // Lógica de Ubicación Específica
+                // 1. Entradas a la ubicación
+                // Evitamos contar TRANSFER_OUT como entrada (aunque tenga toLocationId) 
+                // para evitar duplicidad si el sistema registró OUT e IN por separado.
+                if (m.toLocationId === selectedLocationId && m.type !== MovementType.TRANSFER_OUT) {
                     results[pid] += m.quantity;
                 }
-                if (m.fromLocationId === selectedLocationId) {
+                
+                // 2. Salidas de la ubicación
+                // Evitamos contar TRANSFER_IN como salida (aunque tenga fromLocationId)
+                if (m.fromLocationId === selectedLocationId && m.type !== MovementType.TRANSFER_IN) {
                     results[pid] -= m.quantity;
                 }
             }

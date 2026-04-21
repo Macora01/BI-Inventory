@@ -1,8 +1,8 @@
 /**
  * MovementsPage.tsx
- * Version: 1.2.019
+ * Version: 1.2.020
  */
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import Card from '../components/Card';
 import FileUpload from '../components/FileUpload';
 import { useInventory } from '../context/InventoryContext';
@@ -10,16 +10,19 @@ import { useToast } from '../hooks/useToast';
 import { parseInitialInventoryCSV, parseSalesCSV, parseTransferCSV } from '../services/csvParser';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
-import { MovementType, Product } from '../types';
+import { MovementType, Product, Movement } from '../types';
 import { MOVEMENT_TYPE_MAP } from '../constants';
+import { RotateCcw, History, UploadCloud, Trash2 } from 'lucide-react';
 
 const normalizeName = (name: string) => name.toLowerCase().replace(/[\s_]/g, '');
 
 const MovementsPage: React.FC = () => {
-    const { addMovement, updateStock, setInitialData, locations, products, movements, stock, addProduct, updateProduct, addBulkMovements } = useInventory();
+    const { addMovement, updateStock, setInitialData, locations, products, movements, stock, addProduct, updateProduct, addBulkMovements, revertMovements } = useInventory();
     const { addToast } = useToast();
+    const [activeTab, setActiveTab] = useState<'loads' | 'history'>('loads');
 
     const getStock = (productId: string, locationId: string) => {
+// ... (omitiendo líneas intermedias idénticas para brevedad en el pensamiento, pero aplicar edit_file completo)
         const item = stock.find(s => s.productId === productId && s.locationId === locationId);
         return item ? item.quantity : 0;
     };
@@ -464,17 +467,118 @@ const MovementsPage: React.FC = () => {
         }
     }, [addBulkMovements, locations, addToast, products]);
 
+    const handleRevert = async (m: Movement) => {
+        if (!confirm('¿Estás seguro de revertir este movimiento? Se creará una acción contraria para ajustar el stock.')) return;
+        try {
+            await revertMovements([m]);
+            addToast('Movimiento revertido correctamente.', 'success');
+        } catch (err: any) {
+            addToast(`Error al revertir: ${err.message}`, 'error');
+        }
+    };
+
+    const handleRevertBatch = async (batchMovements: Movement[]) => {
+        if (!confirm(`¿Estás seguro de revertir este bloque de ${batchMovements.length} movimientos?`)) return;
+        try {
+            await revertMovements(batchMovements);
+            addToast('Bloque revertido correctamente.', 'success');
+        } catch (err: any) {
+            addToast(`Error al revertir bloque: ${err.message}`, 'error');
+        }
+    };
+
+    const groupedBatches = useMemo(() => {
+        const groups: Record<string, Movement[]> = {};
+        movements.forEach(m => {
+            // Agrupar por relatedFile o por fecha minuto (para acciones manuales)
+            const dateKey = new Date(m.timestamp).toISOString().slice(0, 16); // yyyy-mm-ddThh:mm
+            const groupKey = m.relatedFile || `Acción Manual - ${dateKey}`;
+            if (!groups[groupKey]) groups[groupKey] = [];
+            groups[groupKey].push(m);
+        });
+        
+        return Object.entries(groups)
+            .map(([key, movs]) => ({
+                id: key,
+                name: key,
+                count: movs.length,
+                lastTimestamp: new Date(Math.max(...movs.map(mv => new Date(mv.timestamp).getTime()))),
+                movements: movs,
+                type: movs[0].type
+            }))
+            .sort((a, b) => b.lastTimestamp.getTime() - a.lastTimestamp.getTime());
+    }, [movements]);
+
     return (
         <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-primary">Cargar Movimientos</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card title="Carga Inicial (Sobrescribe Stock)"><FileUpload onFileProcess={processInitialInventory} title="Cargar Inventario Inicial" /></Card>
-                <Card title="Adición de Productos (Suma Stock)"><FileUpload onFileProcess={processAppendInventory} title="Agregar Productos" /></Card>
-                <Card title="Transferencias (Traslados)"><FileUpload onFileProcess={processTransfers} title="Cargar Transferencia" /></Card>
-                <Card title="Ventas Diarias (Ventas)"><FileUpload onFileProcess={processSales} title="Cargar Ventas" /></Card>
+            <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-bold text-primary">Gestión de Movimientos</h2>
+                <div className="flex bg-background-dark p-1 rounded-lg">
+                    <button 
+                        onClick={() => setActiveTab('loads')}
+                        className={`px-4 py-2 rounded-md transition-all flex items-center gap-2 ${activeTab === 'loads' ? 'bg-primary text-white shadow-lg' : 'text-text-light hover:text-primary'}`}
+                    >
+                        <UploadCloud size={18} />
+                        Cargar
+                    </button>
+                    <button 
+                        onClick={() => setActiveTab('history')}
+                        className={`px-4 py-2 rounded-md transition-all flex items-center gap-2 ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-text-light hover:text-primary'}`}
+                    >
+                        <History size={18} />
+                        Historial
+                    </button>
+                </div>
             </div>
+
+            {activeTab === 'loads' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    <Card title="Carga Inicial (Sobrescribe Stock)"><FileUpload onFileProcess={processInitialInventory} title="Cargar Inventario Inicial" /></Card>
+                    <Card title="Adición de Productos (Suma Stock)"><FileUpload onFileProcess={processAppendInventory} title="Agregar Productos" /></Card>
+                    <Card title="Transferencias (Traslados)"><FileUpload onFileProcess={processTransfers} title="Cargar Transferencia" /></Card>
+                    <Card title="Ventas Diarias (Ventas)"><FileUpload onFileProcess={processSales} title="Cargar Ventas" /></Card>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-6">
+                    <Card title="Historial de Acciones Masivas (Batches)">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left text-text-main">
+                                <thead className="text-xs text-primary uppercase bg-accent">
+                                    <tr>
+                                        <th scope="col" className="px-6 py-3">Fecha</th>
+                                        <th scope="col" className="px-6 py-3">Origen / Archivo</th>
+                                        <th scope="col" className="px-6 py-3">Registros</th>
+                                        <th scope="col" className="px-6 py-3">Tipo Principal</th>
+                                        <th scope="col" className="px-6 py-3 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {groupedBatches.slice(0, 20).map(batch => (
+                                        <tr key={batch.id} className="bg-background-light border-b border-background hover:bg-accent transition-colors">
+                                            <td className="px-6 py-4">{batch.lastTimestamp.toLocaleString()}</td>
+                                            <td className="px-6 py-4 font-medium">{batch.name}</td>
+                                            <td className="px-6 py-4">{batch.count}</td>
+                                            <td className="px-6 py-4">{MOVEMENT_TYPE_MAP[batch.type] || batch.type}</td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button 
+                                                    onClick={() => handleRevertBatch(batch.movements)}
+                                                    className="inline-flex items-center gap-1 text-danger hover:bg-danger/10 px-2 py-1 rounded transition-all"
+                                                    title="Revertir todo este bloque"
+                                                >
+                                                    <RotateCcw size={14} />
+                                                    Revertir Todo
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </Card>
+                </div>
+            )}
             
-            <Card title="Últimos Movimientos">
+            <Card title="Últimos Movimientos Individuales">
                 <div className="overflow-x-auto max-h-96">
                     <table className="w-full text-sm text-left text-text-main">
                         <thead className="text-xs text-primary uppercase bg-accent sticky top-0">
@@ -485,18 +589,24 @@ const MovementsPage: React.FC = () => {
                                 <th scope="col" className="px-6 py-3 text-right">Cantidad</th>
                                 <th scope="col" className="px-6 py-3">Origen</th>
                                 <th scope="col" className="px-6 py-3">Destino</th>
+                                <th scope="col" className="px-6 py-3 text-right">Acción</th>
                             </tr>
                         </thead>
                         <tbody>
                              {movements.slice(0, 50).map(m => {
                                 const product = products.find(p => p.id_venta === m.productId);
                                 return (
-                                <tr key={m.id} className="bg-background-light border-b border-background">
+                                <tr key={m.id} className="bg-background-light border-b border-background hover:bg-accent transition-colors">
                                     <td className="px-6 py-4">{new Date(m.timestamp).toLocaleString()}</td>
                                     <td className="px-6 py-4">
                                         {product ? `${product.description} (${m.productId})` : m.productId}
                                     </td>
-                                    <td className="px-6 py-4">{MOVEMENT_TYPE_MAP[m.type] || m.type}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col">
+                                            <span>{MOVEMENT_TYPE_MAP[m.type] || m.type}</span>
+                                            {m.relatedFile && <span className="text-[10px] text-text-light">{m.relatedFile}</span>}
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-4">
                                         <span className={`font-medium ${
                                             m.type === MovementType.SALE || m.type === MovementType.TRANSFER_OUT || (m.type === MovementType.ADJUSTMENT && m.fromLocationId && !m.toLocationId)
@@ -510,6 +620,17 @@ const MovementsPage: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-4">{locations.find(l => l.id === m.fromLocationId)?.name || 'N/A'}</td>
                                     <td className="px-6 py-4">{locations.find(l => l.id === m.toLocationId)?.name || 'N/A'}</td>
+                                    <td className="px-6 py-4 text-right">
+                                        {m.type !== MovementType.REVERSION && (
+                                            <button 
+                                                onClick={() => handleRevert(m)}
+                                                className="text-text-light hover:text-danger transition-colors p-1"
+                                                title="Revertir este movimiento"
+                                            >
+                                                <RotateCcw size={16} />
+                                            </button>
+                                        )}
+                                    </td>
                                 </tr>
                             );
                             })}

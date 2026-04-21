@@ -53,6 +53,7 @@ interface InventoryContextType {
     bulkUploadImages: (files: FileList) => Promise<{ success: number; failed: number }>;
     returnAllToWarehouse: (locationId: string) => Promise<void>;
     addBulkMovements: (movements: (Omit<Movement, 'id' | 'timestamp'> & { timestamp?: Date | string })[], stockAdjustments: { productId: string, locationId: string, quantityChange: number }[]) => Promise<void>;
+    revertMovements: (movements: Movement[]) => Promise<void>;
     
     // Auth
     currentUser: User | null;
@@ -576,6 +577,26 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
         await addBulkMovements(movementsBatch, stockAdjustments);
     }, [locations, stock, addBulkMovements]);
 
+    const revertMovements = useCallback(async (movementsToRevert: Movement[]) => {
+        try {
+            const response = await fetch('/api/movements/revert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ movements: movementsToRevert })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Error al revertir movimientos');
+            }
+
+            await fetchData();
+        } catch (error) {
+            console.error('Error in revertMovements context:', error);
+            throw error;
+        }
+    }, [fetchData]);
+
     return (
         <InventoryContext.Provider value={{ 
             products, stock, movements, locations, users, 
@@ -586,6 +607,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             addLocation, updateLocation, deleteLocation,
             addUser, updateUser, deleteUser,
             loading, error, dbStatus, logo, fetchData, checkHealth, fetchLogo, addBulkMovements,
+            revertMovements,
             uploadProductImage, bulkUploadImages,
             returnAllToWarehouse,
             currentUser, isAuthenticated: !!currentUser, login, logout

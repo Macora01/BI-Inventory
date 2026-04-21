@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.2.020",
+        date: "2026-04-21",
+        title: "Sistema de Reversión e Historial",
+        changes: [
+            "Historial de Cargas: Nueva pestaña en Movimientos para gestionar y revertir bloques de acciones (por archivo o tiempo).",
+            "Reversión de Stock: Capacidad de deshacer transacciones individuales o masivas creando acciones de compensación automáticas.",
+            "Corrección de Reporte de Existencias: Se eliminó el error de duplicidad en transferencias y se incluyeron los ajustes manuales en el cálculo histórico.",
+            "Interfaz: Botones de 'Undo' rápidos en las tablas de movimientos."
+        ]
+    },
+    {
         version: "1.2.019",
         date: "2026-04-20",
         title: "Corrección Precisión de Reportes",
