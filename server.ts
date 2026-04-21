@@ -287,6 +287,7 @@ async function startServer() {
                         toLocationId: m.fromLocationId,
                         timestamp,
                         relatedFile: `Reversión de ${m.relatedFile || m.id}`,
+                        reason: `REVERTIDO:${m.type}`, // Tag with the original type
                         price: m.price || 0,
                         cost: m.cost || 0
                     };
@@ -341,6 +342,7 @@ async function startServer() {
                     toLocationId: m.fromLocationId,
                     timestamp,
                     relatedFile: `Reversión de ${m.relatedFile || m.id}`,
+                    reason: `REVERTIDO:${m.type}`, // Tag with the original type
                     price: m.price || 0,
                     cost: m.cost || 0
                 };

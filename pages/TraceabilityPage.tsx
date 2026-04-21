@@ -21,26 +21,57 @@ const TraceabilityPage: React.FC = () => {
     const [isScannerOpen, setIsScannerOpen] = useState(false);
     const { movements, findProductById, locations, stock, revertMovements, addBulkMovements, fetchData, fetchLogo, checkHealth } = useInventory();
 
+    const getTraceabilityData = (id: string): TraceabilityData | null => {
+        const product = findProductById(id);
+        if (!product) return null;
+
+        const history = movements
+            .filter(m => m.productId === id)
+            .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        
+        const rawInitialStock = history
+            .filter(m => m.type === MovementType.INITIAL_LOAD)
+            .reduce((sum, m) => sum + Number(m.quantity), 0);
+        
+        const initialReversions = history
+            .filter(m => m.type === MovementType.REVERSION && (
+                m.reason?.includes('INITIAL_LOAD') || 
+                m.reason?.includes('Carga Inicial') || 
+                m.relatedFile?.includes('CARGA_INICIAL') || 
+                m.relatedFile?.includes('Carga Inicial')
+            ))
+            .reduce((sum, m) => sum + Number(m.quantity), 0);
+
+        const initialStock = Math.max(0, rawInitialStock - initialReversions);
+
+        const currentStock = stock
+            .filter(s => s.productId === id)
+            .reduce((sum, s) => sum + Number(s.quantity), 0);
+
+        return {
+            history: [...history].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+            initialStock,
+            currentStock
+        };
+    };
+
     const handleSearch = () => {
-        const product = findProductById(productId);
-        if (product) {
-            const history = movements
-                .filter(m => m.productId === productId)
-                .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-            
-            const initialStock = history
-                .filter(m => m.type === MovementType.INITIAL_LOAD)
-                .reduce((sum, m) => sum + Number(m.quantity), 0);
+        const data = getTraceabilityData(productId);
+        if (data) {
+            setTraceabilityData(data);
+            setProductNotFound(false);
+        } else {
+            setTraceabilityData(null);
+            setProductNotFound(true);
+        }
+    };
 
-            const currentStock = stock
-                .filter(s => s.productId === productId)
-                .reduce((sum, s) => sum + Number(s.quantity), 0);
-
-            setTraceabilityData({
-                history: [...history].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
-                initialStock,
-                currentStock
-            });
+    const handleQRScan = (decodedText: string) => {
+        const upperCode = decodedText.toUpperCase();
+        setProductId(upperCode);
+        const data = getTraceabilityData(upperCode);
+        if (data) {
+            setTraceabilityData(data);
             setProductNotFound(false);
         } else {
             setTraceabilityData(null);
@@ -50,35 +81,6 @@ const TraceabilityPage: React.FC = () => {
 
     const product = traceabilityData ? findProductById(productId) : null;
 
-    const handleQRScan = (decodedText: string) => {
-        const upperCode = decodedText.toUpperCase();
-        setProductId(upperCode);
-        const product = findProductById(upperCode);
-        if (product) {
-            const history = movements
-                .filter(m => m.productId === upperCode)
-                .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-            
-            const initialStock = history
-                .filter(m => m.type === MovementType.INITIAL_LOAD)
-                .reduce((sum, m) => sum + Number(m.quantity), 0);
-
-            const currentStock = stock
-                .filter(s => s.productId === upperCode)
-                .reduce((sum, s) => sum + Number(s.quantity), 0);
-
-            setTraceabilityData({
-                history: [...history].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
-                initialStock,
-                currentStock
-            });
-            setProductNotFound(false);
-        } else {
-            setTraceabilityData(null);
-            setProductNotFound(true);
-        }
-    };
-
     // Cálculos para el resumen detallado (ENFOQUE GLOBAL)
     const summary = React.useMemo(() => {
         if (!traceabilityData) return null;
@@ -87,7 +89,6 @@ const TraceabilityPage: React.FC = () => {
         const entries = traceabilityData.history
             .filter(m => {
                 const isPositive = !(m.type === MovementType.SALE || m.type === MovementType.TRANSFER_OUT || (m.type === MovementType.ADJUSTMENT && m.fromLocationId && !m.toLocationId) || m.type === MovementType.REVERSION);
-                // Ignoramos carga inicial (es el punto de partida) y transferencias
                 return isPositive && 
                        m.type !== MovementType.INITIAL_LOAD && 
                        m.type !== MovementType.TRANSFER_IN;
@@ -95,9 +96,16 @@ const TraceabilityPage: React.FC = () => {
             .reduce((sum, m) => sum + Number(m.quantity), 0);
 
         // Salidas reales del sistema (excluyendo transferencias internas)
+        // EXCLUIMOS reversiones de carga inicial porque ya se restaron del Stock Inicial arriba
         const exits = traceabilityData.history
             .filter(m => {
-                const isNegative = (m.type === MovementType.SALE || (m.type === MovementType.ADJUSTMENT && m.fromLocationId && !m.toLocationId) || m.type === MovementType.REVERSION);
+                const isReversionOfInitial = m.type === MovementType.REVERSION && (
+                    m.reason?.includes('INITIAL_LOAD') || 
+                    m.reason?.includes('Carga Inicial') || 
+                    m.relatedFile?.includes('CARGA_INICIAL') || 
+                    m.relatedFile?.includes('Carga Inicial')
+                );
+                const isNegative = (m.type === MovementType.SALE || (m.type === MovementType.ADJUSTMENT && m.fromLocationId && !m.toLocationId) || (m.type === MovementType.REVERSION && !isReversionOfInitial));
                 return isNegative;
             })
             .reduce((sum, m) => sum + Number(m.quantity), 0);
