@@ -12,7 +12,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
 const ReportsPage: React.FC = () => {
-    const { movements, products, locations } = useInventory();
+    const { movements, products, locations, stock } = useInventory();
     const [reportType, setReportType] = useState<'sales' | 'inventory'>('sales');
     const [reportData, setReportData] = useState<Movement[]>([]);
     const [inventoryReportData, setInventoryReportData] = useState<{ productId: string, description: string, quantity: number }[]>([]);
@@ -67,60 +67,62 @@ const ReportsPage: React.FC = () => {
         setReportType('inventory');
         setActiveRange('inventory');
         
-        const targetDate = new Date(snapshotDate);
-        targetDate.setHours(23, 59, 59, 999);
+        const isToday = new Date(snapshotDate).setHours(0,0,0,0) >= new Date().setHours(0,0,0,0);
 
         const results: Record<string, number> = {};
 
-        movements.forEach(m => {
-            const mDate = new Date(m.timestamp);
-            if (mDate > targetDate) return;
-
-            const pid = m.productId;
-            if (!results[pid]) results[pid] = 0;
-
-            if (selectedLocationId === 'all') {
-                // Lógica Global
-                if (m.type === MovementType.INITIAL_LOAD || m.type === MovementType.PRODUCT_ADDITION) {
-                    results[pid] += Number(m.quantity);
-                } else if (m.type === MovementType.SALE) {
-                    results[pid] -= Number(m.quantity);
-                } else if (m.type === MovementType.REVERSION) {
-                    if (m.toLocationId && !m.fromLocationId) results[pid] += Number(m.quantity);
-                    if (m.fromLocationId && !m.toLocationId) results[pid] -= Number(m.quantity);
-                } else if (m.type === MovementType.ADJUSTMENT) {
-                    if (m.toLocationId && !m.fromLocationId) results[pid] += Number(m.quantity);
-                    if (m.fromLocationId && !m.toLocationId) results[pid] -= Number(m.quantity);
+        if (isToday) {
+            // REPORTE DE HOY (O FUTURO): Basado en Stock Físico Real
+            products.forEach(p => {
+                const pid = p.id_venta.trim().toUpperCase();
+                
+                if (selectedLocationId === 'all') {
+                    // Sumamos stock de todas las ubicaciones para este producto
+                    const total = stock
+                        .filter(s => s.productId.trim().toUpperCase() === pid)
+                        .reduce((sum, s) => sum + Number(s.quantity), 0);
+                    
+                    if (total > 0) results[pid] = total;
+                } else {
+                    // Solo para la ubicación seleccionada
+                    const locId = selectedLocationId.trim().toUpperCase();
+                    const totalAtLoc = stock
+                        .filter(s => s.productId.trim().toUpperCase() === pid && s.locationId.trim().toUpperCase() === locId)
+                        .reduce((sum, s) => sum + Number(s.quantity), 0);
+                    
+                    if (totalAtLoc > 0) results[pid] = totalAtLoc;
                 }
-            } else {
-                // Lógica de Ubicación Específica (ALMDOM, VLT, etc.)
-                const selectedLoc = locations.find(l => l.id === selectedLocationId);
+            });
+        } else {
+            // REPORTE HISTÓRICO: Basado en Movimientos
+            const targetDate = new Date(snapshotDate);
+            targetDate.setHours(23, 59, 59, 999);
+
+            movements.forEach(m => {
+                const mDate = new Date(m.timestamp);
+                if (mDate > targetDate) return;
+
+                const pid = m.productId.trim().toUpperCase();
+                if (!results[pid]) results[pid] = 0;
                 const qty = Number(m.quantity);
-                
-                // Identificadores para búsqueda inclusiva
-                const possibleIds = [selectedLocationId];
-                if (selectedLoc) {
-                    possibleIds.push(selectedLoc.name);
-                    // También probamos variaciones comunes que podrían estar en los logs
-                    if (selectedLocationId.startsWith('ALM')) {
-                        possibleIds.push(selectedLocationId.replace('ALM', ''));
+
+                if (selectedLocationId === 'all') {
+                    if (m.type === MovementType.INITIAL_LOAD || m.type === MovementType.PRODUCT_ADDITION) results[pid] += qty;
+                    else if (m.type === MovementType.SALE) results[pid] -= qty;
+                    else if (m.type === MovementType.REVERSION || m.type === MovementType.ADJUSTMENT) {
+                        if (m.toLocationId && !m.fromLocationId) results[pid] += qty;
+                        if (m.fromLocationId && !m.toLocationId) results[pid] -= qty;
                     }
-                }
+                } else {
+                    const locId = selectedLocationId.trim().toUpperCase();
+                    const mTo = m.toLocationId?.trim().toUpperCase();
+                    const mFrom = m.fromLocationId?.trim().toUpperCase();
 
-                const isToSelected = possibleIds.some(id => m.toLocationId === id);
-                const isFromSelected = possibleIds.some(id => m.fromLocationId === id);
-
-                // Una entrada es cualquier movimiento que tenga este destino
-                if (isToSelected) {
-                    results[pid] += qty;
+                    if (mTo === locId) results[pid] += qty;
+                    if (mFrom === locId) results[pid] -= qty;
                 }
-                
-                // Una salida es cualquier movimiento que tenga este origen
-                if (isFromSelected) {
-                    results[pid] -= qty;
-                }
-            }
-        });
+            });
+        }
 
         const formattedResults = Object.entries(results)
             .map(([productId, quantity]) => {

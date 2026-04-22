@@ -10,6 +10,27 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.020",
+        title: "Normalización de Base de Datos y Reportes",
+        date: "2026-04-22",
+        changes: [
+            "Normalización de IDs: Ahora el sistema trata 'Almdom', 'ALMDOM' y 'ALMDOM ' como la misma ubicación para evitar duplicidades y ceros.",
+            "Blindaje de Stock: El reporte de hoy ignora el historial sumado y usa exclusivamente el stock físico consolidado.",
+            "Corrección de Duplicados: Se eliminó el riesgo de suma doble al consolidar todos los almacenes.",
+            "Visibilidad de Versión: Mejorada la legibilidad de la versión en la barra lateral."
+        ]
+    },
+    {
+        version: "1.3.019",
+        title: "Sincronización Definitiva de Reportes",
+        date: "2026-04-22",
+        changes: [
+            "Alineación de Stock: Los reportes generados con fecha actual ahora consultan directamente el stock físico. Esto garantiza que la información en Inventario y Reportes sea idéntica al 100%.",
+            "Manejo de Cargas Históricas: Se eliminó la dependencia exclusiva de logs para reportes del día actual, resolviendo el problema de 'reportes en cero' por falta de historial de movimientos.",
+            "Optimización de Consultas: Mejora en la velocidad de generación de existencias para almacenes específicos."
+        ]
+    },
+    {
         version: "1.3.018",
         title: "Unificación de Identidades de Almacén",
         date: "2026-04-22",
