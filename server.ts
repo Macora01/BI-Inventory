@@ -157,20 +157,6 @@ async function initDb() {
             `);
             console.log('PostgreSQL Tables initialized successfully');
 
-            // Diagnóstico y Limpieza de Bodegas Duplicadas (v1.3.004)
-            const allLocs = await client.query("SELECT id, name FROM locations WHERE name ILIKE '%Bodega%' OR name ILIKE '%Central%' OR id IN ('BODCEN', 'BODCENT')");
-            console.log('[CLEANUP] Locations identified:', allLocs.rows);
-
-            for (const loc of allLocs.rows) {
-                // Si el ID no es BODCENT, pero el nombre es Bodega Central, lo eliminamos
-                if (loc.id !== 'BODCENT' && (loc.name === 'Bodega Central' || loc.id === 'BODCEN')) {
-                    console.log(`[CLEANUP] Deleting redundant location: ${loc.name} (${loc.id})`);
-                    // El trigger manual de borrado que implementamos antes:
-                    await client.query('DELETE FROM stock WHERE "locationId" = $1', [loc.id]);
-                    await client.query('DELETE FROM locations WHERE id = $1', [loc.id]);
-                }
-            }
-
             // Asegurar que exista la Bodega Central (BODCENT) como la única válida
             const bodcentCheck = await client.query("SELECT id FROM locations WHERE id = 'BODCENT'");
             if (bodcentCheck.rows.length === 0) {

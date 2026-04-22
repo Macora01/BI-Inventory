@@ -10,6 +10,15 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.005",
+        title: "Estabilidad de Despliegue",
+        date: "2026-04-22",
+        changes: [
+            "Optimización de Construcción: Limpieza de scripts auxiliares y mejora en la configuración de empaquetado para asegurar el despliegue correcto.",
+            "Consolidación Final: Confirmada la eliminación de datos duplicados y sincronización de base de datos."
+        ]
+    },
+    {
         version: "1.3.004",
         title: "Consolidación de Bodega Central",
         date: "2026-04-22",
