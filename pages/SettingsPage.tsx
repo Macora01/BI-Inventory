@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.018",
+        title: "Unificación de Identidades de Almacén",
+        date: "2026-04-22",
+        changes: [
+            "Mapeo Inclusivo: Los reportes ahora unifican movimientos bajo ID, Nombre y Alias (ej. busca VLT y ALMVLT simultáneamente). Esto recupera los reportes que aparecían en cero por discrepancias de ID históricas.",
+            "Blindaje Numérico (v2): Mantenida la suma matemática estricta para evitar concatenaciones.",
+            "Integridad de Datos: Confirmado que no existe borrado de información, solo mejora en la lectura del historial."
+        ]
+    },
+    {
         version: "1.3.017",
         title: "Reparación Crítica: Integridad Matemática",
         date: "2026-04-22",

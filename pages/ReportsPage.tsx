@@ -94,14 +94,29 @@ const ReportsPage: React.FC = () => {
                 }
             } else {
                 // Lógica de Ubicación Específica (ALMDOM, VLT, etc.)
+                const selectedLoc = locations.find(l => l.id === selectedLocationId);
                 const qty = Number(m.quantity);
+                
+                // Identificadores para búsqueda inclusiva
+                const possibleIds = [selectedLocationId];
+                if (selectedLoc) {
+                    possibleIds.push(selectedLoc.name);
+                    // También probamos variaciones comunes que podrían estar en los logs
+                    if (selectedLocationId.startsWith('ALM')) {
+                        possibleIds.push(selectedLocationId.replace('ALM', ''));
+                    }
+                }
+
+                const isToSelected = possibleIds.some(id => m.toLocationId === id);
+                const isFromSelected = possibleIds.some(id => m.fromLocationId === id);
+
                 // Una entrada es cualquier movimiento que tenga este destino
-                if (m.toLocationId === selectedLocationId) {
+                if (isToSelected) {
                     results[pid] += qty;
                 }
                 
                 // Una salida es cualquier movimiento que tenga este origen
-                if (m.fromLocationId === selectedLocationId) {
+                if (isFromSelected) {
                     results[pid] -= qty;
                 }
             }
