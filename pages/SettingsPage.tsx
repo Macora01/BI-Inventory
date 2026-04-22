@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.004",
+        title: "Consolidación de Bodega Central",
+        date: "2026-04-22",
+        changes: [
+            "Limpieza de Ubicaciones: Eliminada la duplicidad entre 'Bodega Central' y 'BODCENT'. Ahora 'BODCENT' es la única ubicación maestra.",
+            "Saneamiento de Existencias: Se eliminó el stock erróneo (1.089 unidades) que estaba atrapado en la ubicación duplicada, sin afectar el stock real en BODCENT u otros almacenes.",
+            "Optimización de Base de Datos: Scripts de mantenimiento ejecutados automáticamente al iniciar el sistema."
+        ]
+    },
+    {
         version: "1.3.003",
         title: "Corrección de Lógica de Visibilidad",
         date: "2026-04-21",
