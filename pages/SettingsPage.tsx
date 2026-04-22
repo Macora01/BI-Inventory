@@ -10,6 +10,36 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.016",
+        title: "Claridad Visual y Consolidación",
+        date: "2026-04-22",
+        changes: [
+            "Contraste de UI: Aumentada la legibilidad de la versión y etiquetas en la barra lateral con colores más brillantes y blancos puros.",
+            "Estabilidad de Reportes: Confirmada la visualización correcta de stock en almacenes periféricos (como ALMDOM).",
+            "Refinamiento Estético: Ajuste de espaciados y tipografía en el encabezado del sistema."
+        ]
+    },
+    {
+        version: "1.3.015",
+        title: "Exactitud Matemática en Reportes",
+        date: "2026-04-22",
+        changes: [
+            "Motor de Reportes V3: Reescrita la lógica de cálculo por almacén basada en flujo neto absoluto (Entradas minus Salidas).",
+            "Consistencia ALMDOM: Verificado que los almacenes de destino sumen correctamente en todos los reportes.",
+            "Auditoría Visual: Mejorado el acceso a la trazabilidad por celda para diagnóstico inmediato."
+        ]
+    },
+    {
+        version: "1.3.014",
+        title: "Inspector de Historial y Reportes Corregidos",
+        date: "2026-04-22",
+        changes: [
+            "Auditoría por Celda: Implementada la 'Lupa' en la tabla de inventario para ver el historial exacto de cada celda.",
+            "Corrección de Filtros: Eliminada la restricción que causaba que reportes de almacenes específicos aparecieran vacíos.",
+            "Restauración de Visión: Repuesto el indicador de versión en la barra lateral."
+        ]
+    },
+    {
         version: "1.3.013",
         title: "Integridad de Datos y Restauración de UI",
         date: "2026-04-22",

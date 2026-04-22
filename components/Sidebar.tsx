@@ -46,8 +46,10 @@ const Sidebar: React.FC = () => {
                     </>
                 )}
                 <div className="flex flex-col items-center">
-                    <p className="text-[10px] uppercase font-bold text-secondary tracking-widest mt-1 opacity-80">Inventory System</p>
-                    <p className="text-[10px] font-mono bg-white/10 px-2 py-0.5 rounded mt-2 text-secondary/70">v{APP_VERSION}</p>
+                    <p className="text-[10px] uppercase font-black text-secondary tracking-[0.2em] mt-1 shadow-sm">Inventory System</p>
+                    <p className="text-[10px] font-mono bg-white/20 border border-white/20 px-2 py-0.5 rounded-full mt-3 text-white font-bold shadow-inner">
+                        v{APP_VERSION}
+                    </p>
                 </div>
             </div>
             
