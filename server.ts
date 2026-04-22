@@ -157,11 +157,30 @@ async function initDb() {
             `);
             console.log('PostgreSQL Tables initialized successfully');
 
-            // Asegurar que exista la Bodega Central (BODCENT) como la única válida
+            // Consolidación Maestra de Bodegas (v1.3.006)
+            // Agresivamente eliminamos cualquier duplicado que no sea "BODCENT"
+            const allWarehouseLocs = await client.query(`
+                SELECT id, name FROM locations 
+                WHERE (name ILIKE '%Bodega%' OR name ILIKE '%Central%' OR id = 'BODCEN')
+                AND id != 'BODCENT'
+            `);
+            
+            if (allWarehouseLocs.rows.length > 0) {
+                console.log('[CLEANUP] Found redundant warehouses:', allWarehouseLocs.rows);
+                for (const loc of allWarehouseLocs.rows) {
+                    console.log(`[CLEANUP] Purging stock and location for: ${loc.name} (${loc.id})`);
+                    // 1. Borrar stock de esta ubicación
+                    await client.query('DELETE FROM stock WHERE "locationId" = $1', [loc.id]);
+                    // 2. Borrar la ubicación
+                    await client.query('DELETE FROM locations WHERE id = $1', [loc.id]);
+                }
+            }
+
+            // Asegurar que exista la Bodega Central (BODCENT) como la ÚNICA válida
             const bodcentCheck = await client.query("SELECT id FROM locations WHERE id = 'BODCENT'");
             if (bodcentCheck.rows.length === 0) {
                 await client.query("INSERT INTO locations (id, name, type) VALUES ('BODCENT', 'Bodega Central', 'FIXED_STORE_PERMANENT')");
-                console.log('Location "BODCENT" recreated as master warehouse.');
+                console.log('Location "BODCENT" enforced as master.');
             }
 
             isPgActive = true;

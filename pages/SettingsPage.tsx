@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.006",
+        title: "Saneamiento Definitivo de Bodegas",
+        date: "2026-04-22",
+        changes: [
+            "Purga Permanente: Implementada una limpieza agresiva que elimina cualquier ubicación similar a 'Bodega Central' que no sea el ID oficial 'BODCENT'.",
+            "Eliminación de Stock Residual: Se borraron todas las existencias vinculadas a IDs de bodega obsoletos, asegurando que el reporte de existencias solo muestre datos reales.",
+            "Consolidación de Identidad: 'BODCENT' queda como el único identificador maestro para la Bodega Central."
+        ]
+    },
+    {
         version: "1.3.005",
         title: "Estabilidad de Despliegue",
         date: "2026-04-22",
