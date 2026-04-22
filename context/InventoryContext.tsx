@@ -538,8 +538,8 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
     const returnAllToWarehouse = useCallback(async (locationId: string) => {
         // Encontrar la bodega central (BODCENT)
         const central = locations.find(l => l.id === 'BODCENT' || l.name?.toUpperCase().includes('BODEGA CENTRAL') || l.name?.toUpperCase() === 'BODEGA');
-        if (!central) throw new Error('No se encontró la Bodega Central (BODCENT/BODEGA)');
-        if (locationId === central.id) throw new Error('La ubicación de origen ya es la Bodega Central');
+        if (!central) throw new Error('No se encontró BODCENT');
+        if (locationId === central.id) throw new Error('La ubicación de origen ya es BODCENT');
         
         // Obtener stock remanente
         const itemsToReturn = stock.filter(s => s.locationId === locationId && s.quantity > 0);

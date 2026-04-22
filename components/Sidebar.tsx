@@ -47,7 +47,6 @@ const Sidebar: React.FC = () => {
                 )}
                 <div className="flex flex-col items-center">
                     <p className="text-[10px] uppercase font-bold text-secondary tracking-widest mt-1 opacity-80">Inventory System</p>
-                    <span className="text-[9px] bg-white/10 text-white/50 px-2 mt-1 rounded font-mono">v{APP_VERSION}</span>
                 </div>
             </div>
             

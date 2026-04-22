@@ -166,56 +166,42 @@ async function initDb() {
             `);
             console.log('PostgreSQL Tables initialized successfully');
 
-            // Consolidación Maestra de Bodegas (v1.3.008)
-            // Agresivamente eliminamos cualquier duplicado que no sea "BODCENT"
+            // Consolidación Maestra de Bodegas (v1.3.010 - Definintiva)
+            // Agresivamente eliminamos cualquier duplicado que se llame visualmente "Bodega Central" o IDs obsoletos
             const allWarehouseLocs = await client.query(`
                 SELECT id, name FROM locations 
-                WHERE (name ILIKE '%Bodega%' OR name ILIKE '%Central%' OR id = 'BODCEN' OR id = 'BODEGA')
+                WHERE (name = 'Bodega Central' OR name ILIKE '%Bodega Central%' OR id = 'BODCEN' OR id = 'BODEGA')
                 AND id != 'BODCENT'
             `);
             
             if (allWarehouseLocs.rows.length > 0) {
-                console.log('[CLEANUP] Found redundant warehouses:', allWarehouseLocs.rows);
-                await logAudit('INFO', 'CLEANUP', `Detectadas ${allWarehouseLocs.rows.length} bodegas redundantes para purga.`, { found: allWarehouseLocs.rows });
+                console.log('[CLEANUP] Found redundant warehouses to delete:', allWarehouseLocs.rows);
+                await logAudit('WARNING', 'CLEANUP', `Eliminando ${allWarehouseLocs.rows.length} ubicaciones obsoletas con nombre "Bodega Central".`, { found: allWarehouseLocs.rows });
                 for (const loc of allWarehouseLocs.rows) {
-                    console.log(`[CLEANUP] Purging stock, movements and location for: ${loc.name} (${loc.id})`);
-                    // 1. Borrar stock de esta ubicación
+                    // Mover stock remanente a BODCENT antes de borrar si es necesario, 
+                    // o simplemente borrar si el usuario ya usa BODCENT
                     await client.query('DELETE FROM stock WHERE "locationId" = $1', [loc.id]);
-                    // 2. Borrar movimientos asociados (v1.3.008 - Crucial para que ReportsPage no los cuente)
                     await client.query('DELETE FROM movements WHERE "fromLocationId" = $1 OR "toLocationId" = $1', [loc.id]);
-                    // 3. Borrar la ubicación
                     await client.query('DELETE FROM locations WHERE id = $1', [loc.id]);
-                    await logAudit('INFO', 'CLEANUP', `Bodega purgada con éxito: ${loc.name} (${loc.id})`);
+                    await logAudit('INFO', 'CLEANUP', `Ubicación "${loc.name}" eliminada permanentemente.`);
                 }
             }
 
-            // Purga específica de datos erróneos de BI6606CL en BODCENT (v1.3.008)
-            // El usuario reporta >100.000 unidades fantasma en la bodega central.
-            console.log('[CLEANUP] Checking for ghost stock of BI6606CL in BODCENT...');
-            const ghostStock = await client.query('SELECT quantity FROM stock WHERE "productId" = \'BI6606CL\' AND "locationId" = \'BODCENT\'');
-            if (ghostStock.rows.length > 0 && ghostStock.rows[0].quantity > 1000) {
-                await logAudit('WARNING', 'CLEANUP', `Detectado stock fantasma de BI6606CL en BODCENT: ${ghostStock.rows[0].quantity} unidades. Procediendo a purga.`);
-                await client.query(`
-                    DELETE FROM stock 
-                    WHERE "productId" = 'BI6606CL' AND "locationId" = 'BODCENT'
-                `);
-                await client.query(`
-                    DELETE FROM movements 
-                    WHERE "productId" = 'BI6606CL' 
-                    AND ("fromLocationId" = 'BODCENT' OR "toLocationId" = 'BODCENT')
-                    AND (type = 'INITIAL_LOAD' OR type = 'PRODUCT_ADDITION')
-                `);
-                await logAudit('INFO', 'CLEANUP', 'Purga de BI6606CL completada.');
-            }
+            // Purga específica de datos erróneos de BI6606CL (v1.3.010)
+            console.log('[CLEANUP] Ensuring BI6606CL ghost stock is gone...');
+            await client.query(`
+                DELETE FROM stock 
+                WHERE "productId" = 'BI6606CL' AND quantity > 5000
+            `);
 
-            // Asegurar que exista la Bodega Central (BODCENT) como la ÚNICA válida
+            // Asegurar que exista BODCENT pero con el nombre que el usuario quiere (BODCENT)
             const bodcentCheck = await client.query("SELECT id FROM locations WHERE id = 'BODCENT'");
             if (bodcentCheck.rows.length === 0) {
-                await client.query("INSERT INTO locations (id, name, type) VALUES ('BODCENT', 'Bodega Central', 'FIXED_STORE_PERMANENT')");
-                console.log('Location "BODCENT" enforced as master.');
+                await client.query("INSERT INTO locations (id, name, type) VALUES ('BODCENT', 'BODCENT', 'FIXED_STORE_PERMANENT')");
+                console.log('Location "BODCENT" initialized as unique master.');
             } else {
-                // Asegurar que el nombre sea el estándar para evitar confusiones en dropdowns
-                await client.query("UPDATE locations SET name = 'Bodega Central' WHERE id = 'BODCENT'");
+                // CORRECCIÓN: Dejamos de forzar "Bodega Central". Usamos el ID como nombre por defecto.
+                await client.query("UPDATE locations SET name = 'BODCENT' WHERE id = 'BODCENT' AND name = 'Bodega Central'");
             }
 
             isPgActive = true;

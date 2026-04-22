@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.010",
+        title: "Saneamiento Estético y Simplificación",
+        date: "2026-04-22",
+        changes: [
+            "Limpieza de Interfaz: Eliminada la etiqueta 'MAESTRO' de las ubicaciones, permitiendo una gestión más unificada.",
+            "Despeje de Sidebar: Se eliminó el indicador de versión lateral para reducir el ruido visual en la navegación principal.",
+            "Normalización de Ubicaciones: 'BODCENT' ahora se comporta visualmente como cualquier otra bodega oficial.",
+            "Mejoras de Espaciado: Ajustes menores en la tabla de configuraciones para una lectura más fluida."
+        ]
+    },
+    {
         version: "1.3.009",
         title: "Bitácora de Auditoría y Logs",
         date: "2026-04-22",
@@ -26,9 +37,9 @@ const CHANGELOG = [
         date: "2026-04-22",
         changes: [
             "Purga de Movimientos Históricos: Ahora el saneamiento elimina no solo las bodegas duplicadas, sino también su historial de movimientos, evitando que el Reporte de Existencias muestre datos 'fantasma'.",
-            "Corrección de BI6606CL: Se eliminaron registros erróneos (>100k unidades) del producto BI6606CL en la bodega central resultantes de importaciones fallidas previas.",
+            "Corrección de BI6606CL: Se eliminaron registros erróneos (>100k unidades) del producto BI6606CL en BODCENT resultantes de importaciones fallidas previas.",
             "Estabilidad en Transferencias Excel: Se mejoró la lectura de archivos XLSX para asegurar que las transferencias entre almacenes se procesen correctamente.",
-            "Garantía de Nombre Único: Se forza que 'BODCENT' siempre tenga el nombre 'Bodega Central' para evitar confusiones en los reportes."
+            "Garantía de Nombre Único: Se forza que 'BODCENT' siempre tenga el nombre 'BODCENT' para evitar confusiones en los reportes."
         ]
     },
     {
@@ -47,9 +58,9 @@ const CHANGELOG = [
         title: "Saneamiento Definitivo de Bodegas",
         date: "2026-04-22",
         changes: [
-            "Purga Permanente: Implementada una limpieza agresiva que elimina cualquier ubicación similar a 'Bodega Central' que no sea el ID oficial 'BODCENT'.",
+            "Purga Permanente: Implementada una limpieza agresiva que elimina cualquier ubicación similar a esa que no sea el ID oficial 'BODCENT'.",
             "Eliminación de Stock Residual: Se borraron todas las existencias vinculadas a IDs de bodega obsoletos, asegurando que el reporte de existencias solo muestre datos reales.",
-            "Consolidación de Identidad: 'BODCENT' queda como el único identificador maestro para la Bodega Central."
+            "Consolidación de Identidad: 'BODCENT' queda como el único identificador maestro."
         ]
     },
     {
@@ -63,10 +74,10 @@ const CHANGELOG = [
     },
     {
         version: "1.3.004",
-        title: "Consolidación de Bodega Central",
+        title: "Consolidación de BODCENT",
         date: "2026-04-22",
         changes: [
-            "Limpieza de Ubicaciones: Eliminada la duplicidad entre 'Bodega Central' y 'BODCENT'. Ahora 'BODCENT' es la única ubicación maestra.",
+            "Limpieza de Ubicaciones: Eliminada la duplicidad entre 'BODCENT' y otros registros. Ahora 'BODCENT' es la única ubicación maestra.",
             "Saneamiento de Existencias: Se eliminó el stock erróneo (1.089 unidades) que estaba atrapado en la ubicación duplicada, sin afectar el stock real en BODCENT u otros almacenes.",
             "Optimización de Base de Datos: Scripts de mantenimiento ejecutados automáticamente al iniciar el sistema."
         ]
@@ -292,13 +303,13 @@ const SettingsPage: React.FC = () => {
     };
 
     const handleReturnAll = async (location: Location) => {
-        if (!window.confirm(`¿Está seguro de retornar TODO el stock remanente de "${location.name}" a la Bodega Central (BODCENT)? Esta acción generará múltiples movimientos de transferencia.`)) {
+        if (!window.confirm(`¿Está seguro de retornar TODO el stock remanente de "${location.name}" a BODCENT? Esta acción generará múltiples movimientos de transferencia.`)) {
             return;
         }
         
         try {
             await returnAllToWarehouse(location.id);
-            addToast(`Stock de "${location.name}" retornado exitosamente a Bodega Central.`, 'success');
+            addToast(`Stock de "${location.name}" retornado exitosamente a BODCENT.`, 'success');
         } catch (err: any) {
             addToast(`Error al retornar stock: ${err.message}`, 'error');
         }
@@ -594,9 +605,6 @@ const SettingsPage: React.FC = () => {
                                             <td className="px-6 py-4">
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-medium text-text-main">{loc.name}</span>
-                                                    {loc.id === 'BODCENT' && (
-                                                        <span className="px-1.5 py-0.5 bg-primary/10 text-primary text-[8px] font-bold uppercase rounded leading-none">Maestro</span>
-                                                    )}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">

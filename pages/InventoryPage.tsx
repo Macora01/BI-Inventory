@@ -77,10 +77,8 @@ const InventoryPage: React.FC = () => {
         const centralTerms = ['bodcen', 'bodcent', 'bodega', 'central', 'bodega central', 'deposito', 'deposito central'];
         if (centralTerms.includes(sn)) {
             const fallback = locations.find(l => 
-                l.id.toUpperCase() === 'BODCEN' || 
-                l.id.toUpperCase() === 'BODCENT' ||
-                l.name.toLowerCase().includes('bodega') ||
-                l.name.toLowerCase().includes('central') ||
+                l.id.toUpperCase() === 'BODCENT' || 
+                l.id.toUpperCase() === 'BODCEN' ||
                 l.id.toLowerCase().includes('cen')
             );
             if (fallback) return fallback;
@@ -1564,7 +1562,7 @@ const InventoryPage: React.FC = () => {
                                 <h4 className="font-bold text-primary flex items-center mb-2">
                                     <RefreshCw size={18} className="mr-2" /> Transferencias
                                 </h4>
-                                <p className="text-xs text-text-light mb-3">Movimientos entre Bodega Central y Almacenes.</p>
+                                <p className="text-xs text-text-light mb-3">Movimientos entre BODCENT y Almacenes.</p>
                             </div>
                             <FileUpload 
                                 title="Subir Transferencias"
@@ -1605,7 +1603,7 @@ const InventoryPage: React.FC = () => {
                             <li><strong>Catálogo:</strong> id_venta, id_fabrica, description, price, cost, minStock</li>
                             <li><strong>Inventario Inicial:</strong> id_venta, id_fabrica, description, price, cost, qty</li>
                             <li><strong>Transferencias:</strong> sitio_inicial, sitio_final, id_venta, qty <br/>
-                                <span className="text-[9px] text-text-light italic">(Ej: Bodega Central, Vitacura, PROD01, 10)</span>
+                                <span className="text-[9px] text-text-light italic">(Ej: BODCENT, Vitacura, PROD01, 10)</span>
                             </li>
                             <li><strong>Ventas Diarias:</strong> fecha; lugar; id_venta; precio <br/>
                                 <span className="text-[9px] text-text-light italic">(Ej: 31-03-2024; Vitacura; VENTA01; 100)</span>
