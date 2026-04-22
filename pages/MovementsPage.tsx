@@ -251,25 +251,27 @@ const MovementsPage: React.FC = () => {
                 const qty = Number(getVal(item, ['qty', 'cantidad', 'unidades']) || 0);
                 if (!prodId || qty <= 0) continue;
 
-                const fromLocVal = getVal(item, ['sitioinicial', 'origen', 'inicial', 'from']);
-                const toLocVal = getVal(item, ['sitiofinal', 'destino', 'final', 'to']);
-                const timestamp = parseDateValue(getVal(item, ['fecha', 'timestamp', 'date']));
+                const fromLocVal = getVal(item, ['sitioinicial', 'origen', 'inicial', 'from', 'sucursalorigen']);
+                const toLocVal = getVal(item, ['sitiofinal', 'destino', 'final', 'to', 'sucursaldestino']);
+                const timestamp = parseDateValue(getVal(item, ['fecha', 'timestamp', 'date', 'time']));
 
                 const fromLoc = findLoc(String(fromLocVal || ''));
                 const toLoc = findLoc(String(toLocVal || ''));
 
                 if (!fromLoc) {
-                    errorStats[`Origen "${fromLocVal}" no encontrado`] = (errorStats[String(fromLocVal)] || 0) + 1;
+                    errorStats[`Origen "${fromLocVal}" no identificado`] = (errorStats[`Origen "${fromLocVal}" no identificado`] || 0) + 1;
                     continue;
                 }
                 if (!toLoc) {
-                    errorStats[`Destino "${toLocVal}" no encontrado`] = (errorStats[String(toLocVal)] || 0) + 1;
+                    errorStats[`Destino "${toLocVal}" no identificado`] = (errorStats[`Destino "${toLocVal}" no identificado`] || 0) + 1;
                     continue;
                 }
 
                 const currentStock = getStock(prodId, fromLoc.id);
                 if (currentStock < qty) {
-                    errorStats[`Stock insuficiente p/ "${prodId}" en "${fromLoc.name}"`] = (errorStats[prodId] || 0) + 1;
+                    errorStats[`Stock insuficiente (${currentStock}/${qty}) p/ "${prodId}" en "${fromLoc.name}"`] = (errorStats[`Stock insuficiente p/ "${prodId}"`] || 0) + 1;
+                    // Opcional: Podríamos permitirlo si el usuario quiere stock negativo, 
+                    // pero por ahora seguimos la regla de seguridad del sistema.
                     continue;
                 }
 
@@ -303,7 +305,12 @@ const MovementsPage: React.FC = () => {
             }
 
             await addBulkMovements(movementsToBatch, stockAdjustments);
-            addToast(`Transferencia procesada (${movementsToBatch.length / 2} registros).`, 'success');
+            
+            const errorSummary = Object.entries(errorStats).length > 0 
+                ? `\nAdvertencias:\n` + Object.entries(errorStats).map(([msg, count]) => `• ${msg} (x${count})`).join('\n')
+                : '';
+                
+            addToast(`Transferencia procesada (${movementsToBatch.length / 2} productos).${errorSummary}`, errorSummary ? 'warning' : 'success');
         };
 
         try {

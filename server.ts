@@ -46,6 +46,15 @@ async function initDb() {
         try {
             console.log('Connected to PostgreSQL. Initializing tables...');
             await client.query(`
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id SERIAL PRIMARY KEY,
+                    timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                    level TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    details JSONB
+                );
+
                 CREATE TABLE IF NOT EXISTS products (
                     id_venta TEXT PRIMARY KEY,
                     id_fabrica TEXT,
@@ -157,23 +166,46 @@ async function initDb() {
             `);
             console.log('PostgreSQL Tables initialized successfully');
 
-            // Consolidación Maestra de Bodegas (v1.3.006)
+            // Consolidación Maestra de Bodegas (v1.3.008)
             // Agresivamente eliminamos cualquier duplicado que no sea "BODCENT"
             const allWarehouseLocs = await client.query(`
                 SELECT id, name FROM locations 
-                WHERE (name ILIKE '%Bodega%' OR name ILIKE '%Central%' OR id = 'BODCEN')
+                WHERE (name ILIKE '%Bodega%' OR name ILIKE '%Central%' OR id = 'BODCEN' OR id = 'BODEGA')
                 AND id != 'BODCENT'
             `);
             
             if (allWarehouseLocs.rows.length > 0) {
                 console.log('[CLEANUP] Found redundant warehouses:', allWarehouseLocs.rows);
+                await logAudit('INFO', 'CLEANUP', `Detectadas ${allWarehouseLocs.rows.length} bodegas redundantes para purga.`, { found: allWarehouseLocs.rows });
                 for (const loc of allWarehouseLocs.rows) {
-                    console.log(`[CLEANUP] Purging stock and location for: ${loc.name} (${loc.id})`);
+                    console.log(`[CLEANUP] Purging stock, movements and location for: ${loc.name} (${loc.id})`);
                     // 1. Borrar stock de esta ubicación
                     await client.query('DELETE FROM stock WHERE "locationId" = $1', [loc.id]);
-                    // 2. Borrar la ubicación
+                    // 2. Borrar movimientos asociados (v1.3.008 - Crucial para que ReportsPage no los cuente)
+                    await client.query('DELETE FROM movements WHERE "fromLocationId" = $1 OR "toLocationId" = $1', [loc.id]);
+                    // 3. Borrar la ubicación
                     await client.query('DELETE FROM locations WHERE id = $1', [loc.id]);
+                    await logAudit('INFO', 'CLEANUP', `Bodega purgada con éxito: ${loc.name} (${loc.id})`);
                 }
+            }
+
+            // Purga específica de datos erróneos de BI6606CL en BODCENT (v1.3.008)
+            // El usuario reporta >100.000 unidades fantasma en la bodega central.
+            console.log('[CLEANUP] Checking for ghost stock of BI6606CL in BODCENT...');
+            const ghostStock = await client.query('SELECT quantity FROM stock WHERE "productId" = \'BI6606CL\' AND "locationId" = \'BODCENT\'');
+            if (ghostStock.rows.length > 0 && ghostStock.rows[0].quantity > 1000) {
+                await logAudit('WARNING', 'CLEANUP', `Detectado stock fantasma de BI6606CL en BODCENT: ${ghostStock.rows[0].quantity} unidades. Procediendo a purga.`);
+                await client.query(`
+                    DELETE FROM stock 
+                    WHERE "productId" = 'BI6606CL' AND "locationId" = 'BODCENT'
+                `);
+                await client.query(`
+                    DELETE FROM movements 
+                    WHERE "productId" = 'BI6606CL' 
+                    AND ("fromLocationId" = 'BODCENT' OR "toLocationId" = 'BODCENT')
+                    AND (type = 'INITIAL_LOAD' OR type = 'PRODUCT_ADDITION')
+                `);
+                await logAudit('INFO', 'CLEANUP', 'Purga de BI6606CL completada.');
             }
 
             // Asegurar que exista la Bodega Central (BODCENT) como la ÚNICA válida
@@ -181,6 +213,9 @@ async function initDb() {
             if (bodcentCheck.rows.length === 0) {
                 await client.query("INSERT INTO locations (id, name, type) VALUES ('BODCENT', 'Bodega Central', 'FIXED_STORE_PERMANENT')");
                 console.log('Location "BODCENT" enforced as master.');
+            } else {
+                // Asegurar que el nombre sea el estándar para evitar confusiones en dropdowns
+                await client.query("UPDATE locations SET name = 'Bodega Central' WHERE id = 'BODCENT'");
             }
 
             isPgActive = true;
@@ -193,6 +228,19 @@ async function initDb() {
         console.error('Error message:', err.message);
         dbInitError = err.message;
         return false;
+    }
+}
+
+async function logAudit(level: 'INFO' | 'WARNING' | 'ERROR', category: string, message: string, details: any = null) {
+    const currentPool = getPool();
+    if (!currentPool) return;
+    try {
+        await currentPool.query(
+            'INSERT INTO audit_logs (level, category, message, details) VALUES ($1, $2, $3, $4)',
+            [level, category, message, details ? JSON.stringify(details) : null]
+        );
+    } catch (err) {
+        console.error('Failed to log audit:', err);
     }
 }
 
@@ -421,9 +469,15 @@ async function startServer() {
                     }
                 }
                 await currentPool.query('COMMIT');
+                await logAudit('INFO', 'IMPORT', `Procesado lote masivo exitosamente.`, { 
+                    productsCount: products?.length || 0, 
+                    stockCount: stock?.length || 0,
+                    movementsCount: movements?.length || 0 
+                });
                 res.json({ success: true });
             } catch (err: any) {
                 await currentPool.query('ROLLBACK').catch(() => {});
+                await logAudit('ERROR', 'IMPORT', `Falla en procesamiento de lote masivo: ${err.message}`);
                 res.status(500).json({ error: err.message });
             }
         } else {
@@ -463,10 +517,16 @@ async function startServer() {
                 }
                 
                 await currentPool.query('COMMIT');
+                const firstType = movements.length > 0 ? movements[0].type : 'UNKNOWN';
+                await logAudit('INFO', 'MOVEMENT', `Movimientos en lote realizados: ${movements.length}`, { 
+                    type: firstType,
+                    relatedFile: movements[0]?.relatedFile 
+                });
                 res.json({ success: true, count: movements.length });
             } catch (err: any) {
                 await currentPool.query('ROLLBACK').catch(() => {});
                 console.error('Error in bulk movements:', err);
+                await logAudit('ERROR', 'MOVEMENT', `Falla en movimientos en lote: ${err.message}`, { count: movements.length });
                 res.status(500).json({ error: err.message });
             }
         } else {
@@ -520,6 +580,43 @@ async function startServer() {
             }
             await writeDataJson('stock', stockData);
             res.json({ success: true });
+        }
+    });
+
+    // Audit Logs
+    app.get('/api/logs', async (req, res) => {
+        const currentPool = getPool();
+        if (isPgActive && currentPool) {
+            try {
+                const result = await currentPool.query('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 500');
+                res.json(result.rows);
+            } catch (err: any) {
+                res.status(500).json({ error: err.message });
+            }
+        } else {
+            res.json([]);
+        }
+    });
+
+    app.get('/api/logs/download', async (req, res) => {
+        const currentPool = getPool();
+        if (isPgActive && currentPool) {
+            try {
+                const result = await currentPool.query('SELECT * FROM audit_logs ORDER BY timestamp DESC');
+                let csv = 'ID,Fecha,Nivel,Categoria,Mensaje,Detalles\n';
+                for (const row of result.rows) {
+                    const ts = row.timestamp ? new Date(row.timestamp).toLocaleString() : '';
+                    const details = row.details ? JSON.stringify(row.details).replace(/"/g, '""') : '';
+                    csv += `${row.id},"${ts}",${row.level},${row.category},"${row.message.replace(/"/g, '""')}","${details}"\n`;
+                }
+                res.setHeader('Content-Type', 'text/csv');
+                res.setHeader('Content-Disposition', 'attachment; filename=bitacora_actividades.csv');
+                res.send(csv);
+            } catch (err: any) {
+                res.status(500).send('Error generating log file');
+            }
+        } else {
+            res.status(404).send('Logging not active');
         }
     });
 
