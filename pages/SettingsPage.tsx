@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.017",
+        title: "Reparación Crítica: Integridad Matemática",
+        date: "2026-04-22",
+        changes: [
+            "Bug Fix Crítico: Corregido error de concatenación de texto en los reportes. Ahora el sistema fuerza la suma numérica (Number()) eliminando los errores donde '1' se convertía en '11'.",
+            "Consolidación de Totales: El resumen de existencia a fecha vuelve a ser 100% confiable y fiel a los movimientos reales.",
+            "Blindaje de Tipos: Forzada la tipificación numérica en todo el flujo de cálculo de inventario por ubicación."
+        ]
+    },
+    {
         version: "1.3.016",
         title: "Claridad Visual y Consolidación",
         date: "2026-04-22",

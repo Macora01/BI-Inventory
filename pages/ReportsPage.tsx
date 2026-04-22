@@ -82,26 +82,27 @@ const ReportsPage: React.FC = () => {
             if (selectedLocationId === 'all') {
                 // Lógica Global
                 if (m.type === MovementType.INITIAL_LOAD || m.type === MovementType.PRODUCT_ADDITION) {
-                    results[pid] += m.quantity;
+                    results[pid] += Number(m.quantity);
                 } else if (m.type === MovementType.SALE) {
-                    results[pid] -= m.quantity;
+                    results[pid] -= Number(m.quantity);
                 } else if (m.type === MovementType.REVERSION) {
-                    if (m.toLocationId && !m.fromLocationId) results[pid] += m.quantity;
-                    if (m.fromLocationId && !m.toLocationId) results[pid] -= m.quantity;
+                    if (m.toLocationId && !m.fromLocationId) results[pid] += Number(m.quantity);
+                    if (m.fromLocationId && !m.toLocationId) results[pid] -= Number(m.quantity);
                 } else if (m.type === MovementType.ADJUSTMENT) {
-                    if (m.toLocationId && !m.fromLocationId) results[pid] += m.quantity;
-                    if (m.fromLocationId && !m.toLocationId) results[pid] -= m.quantity;
+                    if (m.toLocationId && !m.fromLocationId) results[pid] += Number(m.quantity);
+                    if (m.fromLocationId && !m.toLocationId) results[pid] -= Number(m.quantity);
                 }
             } else {
                 // Lógica de Ubicación Específica (ALMDOM, VLT, etc.)
+                const qty = Number(m.quantity);
                 // Una entrada es cualquier movimiento que tenga este destino
                 if (m.toLocationId === selectedLocationId) {
-                    results[pid] += m.quantity;
+                    results[pid] += qty;
                 }
                 
                 // Una salida es cualquier movimiento que tenga este origen
                 if (m.fromLocationId === selectedLocationId) {
-                    results[pid] -= m.quantity;
+                    results[pid] -= qty;
                 }
             }
         });
