@@ -10,6 +10,38 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.013",
+        title: "Integridad de Datos y Restauración de UI",
+        date: "2026-04-22",
+        changes: [
+            "Mapeo Estricto de Ubicaciones: Eliminada la lógica de 'adivinanza'. Ahora el sistema requiere coincidencia exacta (Nombre o ID) para evitar confusiones entre LIN y VLT.",
+            "Restauración de UI: Se ha repuesto el indicador de versión en la barra lateral debajo del logo para visibilidad permanente.",
+            "Blindaje de Importación: Se han añadido validaciones adicionales en la carga de inventario inicial para asegurar que ningún movimiento se asigne a un almacén incorrecto por error."
+        ]
+    },
+    {
+        version: "1.3.012",
+        title: "Corrección Crítica de Importación y Saneamiento",
+        date: "2026-04-22",
+        changes: [
+            "Bug Fix Importador: Corregida la ceguera del importador de Inventario Inicial. Ahora lee correctamente el almacén del archivo en lugar de volcar todo en BODCENT.",
+            "Normalización de Búsqueda: 'findLoc' ahora es insensible a mayúsculas y caracteres especiales, unificando IDs como VLT y ALMVLT.",
+            "Sincronización Inteligente: El botón de sincronización en Configuración ahora detecta movimientos mal asignados y crea los ajustes necesarios para que los reportes de almacenes específicos dejen de aparecer vacíos.",
+            "Mejora de Precisión: Sello de garantía en el conteo total de unidades (previniendo diferencias como la de 480 vs 486)."
+        ]
+    },
+    {
+        version: "1.3.011",
+        title: "Sincronización y Diagnóstico de Existencias",
+        date: "2026-04-22",
+        changes: [
+            "Herramientas de Consistencia: Añadido selector en Configuración para sincronizar reportes con inventario real (y viceversa).",
+            "Soporte para Cargas Históricas: Permite generar logs automáticos para inventarios cargados antes de la activación de la bitácora.",
+            "Detector de Conflictos: Nueva herramienta para identificar ubicaciones con nombres duplicados pero IDs diferentes (ej: ALMLIN vs ALMVLT).",
+            "Validación de Discrepancias: Mejorada la precisión en el cálculo de reportes para transferencias internas."
+        ]
+    },
+    {
         version: "1.3.010",
         title: "Saneamiento Estético y Simplificación",
         date: "2026-04-22",
@@ -143,7 +175,8 @@ const SettingsPage: React.FC = () => {
         clearAllData, clearProducts, clearLocations, clearUsers,
         backupData, restoreData,
         dbStatus, checkHealth, loading,
-        logo, fetchLogo, returnAllToWarehouse, currentUser
+        logo, fetchLogo, returnAllToWarehouse, currentUser,
+        checkConsistency, syncStockFromMovements, fixMovementsFromStock
     } = useInventory();
     const { addToast } = useToast();
 
@@ -405,6 +438,74 @@ const SettingsPage: React.FC = () => {
                                         {uploadingLogo ? 'Subiendo...' : 'Actualizar Logo'}
                                     </Button>
                                 </div>
+                            </div>
+                        </div>
+                    </Card>
+
+                    <Card title="Saneamiento y Diagnóstico de Datos">
+                        <div className="p-4 space-y-4">
+                            <p className="text-sm text-text-light">
+                                Utilice estas herramientas si detecta discrepancias entre los Reportes y la pestaña de Inventario, 
+                                o si sospecha que hay datos duplicados.
+                            </p>
+                            
+                            <div className="bg-accent/20 p-4 rounded-lg border border-accent">
+                                <h4 className="font-bold text-primary mb-2 flex items-center gap-2">
+                                    <AlertTriangle size={18} /> Herramientas de Sincronización
+                                </h4>
+                                <div className="space-y-3">
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-2 bg-white rounded border border-accent/30">
+                                        <div>
+                                            <p className="text-sm font-bold">Generar Logs desde Stock</p>
+                                            <p className="text-xs text-text-light">Crea movimientos de ajuste para que los reportes coincidan con el inventario actual. Úselo si cargó datos antes de tener logs.</p>
+                                        </div>
+                                        <Button size="sm" onClick={async () => {
+                                            if(window.confirm("¿Seguro? Esto creará movimientos de ajuste automáticos para todas las diferencias detectadas.")) {
+                                                try {
+                                                    // @ts-ignore
+                                                    await fixMovementsFromStock();
+                                                    addToast("Sincronización completada. Los reportes ahora coincidirán con el inventario.", "success");
+                                                } catch(e) { addToast("Error al sincronizar", "error"); }
+                                            }
+                                        }}>Sincronizar Reportes</Button>
+                                    </div>
+                                    
+                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-2 bg-white rounded border border-accent/30">
+                                        <div>
+                                            <p className="text-sm font-bold">Corregir Stock desde Logs</p>
+                                            <p className="text-xs text-text-light">Ajusta el inventario para que coincida exactamente con la suma de movimientos. ADVERTENCIA: Puede borrar stock si faltan logs.</p>
+                                        </div>
+                                        <Button size="sm" variant="secondary" onClick={async () => {
+                                            if(window.confirm("¡ADVERTENCIA! Esto ajustará su inventario físico basándose en el historial de movimientos. Si le faltan movimientos, perderá datos de stock. ¿Desea continuar?")) {
+                                                try {
+                                                    // @ts-ignore
+                                                    await syncStockFromMovements();
+                                                    addToast("Inventario ajustado según historial de movimientos.", "success");
+                                                } catch(e) { addToast("Error al sincronizar", "error"); }
+                                            }
+                                        }}>Sincronizar Stock</Button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-secondary/10 p-4 rounded-lg border border-secondary/20">
+                                <h4 className="font-bold text-secondary mb-2">Detección de Conflictos de Ubicación</h4>
+                                <Button size="sm" variant="secondary" onClick={() => {
+                                    const namesCount: Record<string, string[]> = {};
+                                    locations.forEach(l => {
+                                        const name = l.name.toLowerCase().trim();
+                                        if(!namesCount[name]) namesCount[name] = [];
+                                        namesCount[name].push(l.id);
+                                    });
+                                    const duplicates = Object.entries(namesCount).filter(([name, ids]) => ids.length > 1);
+                                    if(duplicates.length > 0) {
+                                        const msg = duplicates.map(([name, ids]) => `• "${name}" se repite en IDs: ${ids.join(', ')}`).join('\n');
+                                        alert(`Se detectaron nombres de ubicación duplicados:\n\n${msg}\n\nSe recomienda unificar estas ubicaciones usando el ID maestro deseado.`);
+                                    } else {
+                                        addToast("No se detectaron nombres de ubicación duplicados.", "success");
+                                    }
+                                }}>Verificar Duplicados</Button>
+                                <p className="text-[10px] text-text-light mt-2 italic">Recomendación: Si tiene "ALMLIN" y "ALMVLT" con el mismo nombre, cámbieles el nombre para distinguirlos o únalos.</p>
                             </div>
                         </div>
                     </Card>

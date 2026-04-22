@@ -204,6 +204,10 @@ async function initDb() {
                 await client.query("UPDATE locations SET name = 'BODCENT' WHERE id = 'BODCENT' AND name = 'Bodega Central'");
             }
 
+            // Log de ubicaciones para diagnóstico
+            const allLocs = await client.query('SELECT * FROM locations');
+            console.log('[DIAGNOSTIC] Current Locations in DB:', allLocs.rows);
+            
             isPgActive = true;
             return true;
         } finally {

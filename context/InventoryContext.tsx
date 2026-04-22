@@ -577,6 +577,101 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
         await addBulkMovements(movementsBatch, stockAdjustments);
     }, [locations, stock, addBulkMovements]);
 
+    /**
+     * Compara el stock actual vs la suma de movimientos para detectar discrepancias.
+     */
+    const checkConsistency = useCallback(async () => {
+        const report: any[] = [];
+        for (const loc of locations) {
+            for (const prod of products) {
+                const currentStockItem = stock.find(s => s.productId === prod.id_venta && s.locationId === loc.id);
+                const currentStock = currentStockItem ? Number(currentStockItem.quantity) : 0;
+                
+                // Calcular stock desde movimientos
+                let calculated = 0;
+                movements.forEach(m => {
+                    if (m.productId !== prod.id_venta) return;
+                    if (m.toLocationId === loc.id) {
+                        if (m.type !== MovementType.TRANSFER_OUT) calculated += Number(m.quantity);
+                    }
+                    if (m.fromLocationId === loc.id) {
+                        if (m.type !== MovementType.TRANSFER_IN) calculated -= Number(m.quantity);
+                    }
+                });
+
+                if (Math.abs(currentStock - calculated) > 0.001) {
+                    report.push({
+                        productId: prod.id_venta,
+                        description: prod.description,
+                        locationId: loc.id,
+                        locationName: loc.name,
+                        current: currentStock,
+                        calculated: calculated,
+                        diff: currentStock - calculated
+                    });
+                }
+            }
+        }
+        return report;
+    }, [locations, products, stock, movements]);
+
+    /**
+     * Ajusta el stock a lo que digan los movimientos (Sincronización destructiva si faltan movimientos).
+     */
+    const syncStockFromMovements = useCallback(async () => {
+        const discrepancies = await checkConsistency();
+        if (discrepancies.length === 0) return;
+
+        const stockAdjustments = discrepancies.map(d => ({
+            productId: d.productId,
+            locationId: d.locationId,
+            quantityChange: d.calculated - d.current
+        }));
+
+        const response = await fetch('/api/movements/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ movements: [], stockAdjustments })
+        });
+
+        if (response.ok) {
+            await fetchData();
+        } else {
+            throw new Error('Falla al sincronizar stock');
+        }
+    }, [checkConsistency, fetchData]);
+
+    /**
+     * Genera movimientos de Ajuste para que los movimientos coincidan con el stock actual (Ideal para cargas antiguas sin log).
+     */
+    const fixMovementsFromStock = useCallback(async () => {
+        const discrepancies = await checkConsistency();
+        if (discrepancies.length === 0) return;
+
+        const newMovements = discrepancies.map(d => ({
+            productId: d.productId,
+            quantity: Math.abs(d.diff),
+            type: MovementType.ADJUSTMENT,
+            toLocationId: d.diff > 0 ? d.locationId : undefined,
+            fromLocationId: d.diff < 0 ? d.locationId : undefined,
+            timestamp: new Date().toISOString(),
+            reason: 'AUTO-SINC: Ajuste para coincidir con stock físico (Carga histórica)',
+            relatedFile: 'Sincronización de Sistema'
+        }));
+
+        const response = await fetch('/api/movements/bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ movements: newMovements, stockAdjustments: [] })
+        });
+
+        if (response.ok) {
+            await fetchData();
+        } else {
+            throw new Error('Falla al fijar movimientos');
+        }
+    }, [checkConsistency, fetchData]);
+
     const revertMovements = useCallback(async (movementsToRevert: Movement[]) => {
         try {
             const response = await fetch('/api/movements/revert', {
@@ -610,6 +705,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             revertMovements,
             uploadProductImage, bulkUploadImages,
             returnAllToWarehouse,
+            checkConsistency, syncStockFromMovements, fixMovementsFromStock,
             currentUser, isAuthenticated: !!currentUser, login, logout
         }}>
             {children}

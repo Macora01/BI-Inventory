@@ -50,6 +50,8 @@ const InventoryPage: React.FC = () => {
     });
     const [isQRScannerOpen, setIsQRScannerOpen] = useState(false);
     const [isAnalysisModalOpen, setIsAnalysisModalOpen] = useState(false);
+    const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+    const [auditFilter, setAuditFilter] = useState<{ productId: string, locationId: string } | null>(null);
     const [qrScannerTarget, setQRScannerTarget] = useState<'search' | 'product_id' | 'factory_id'>('search');
     
     // Estado para Producto seleccionado (Edición o Nuevo)
@@ -61,34 +63,16 @@ const InventoryPage: React.FC = () => {
     const [uploadingProductImage, setUploadingProductImage] = useState(false);
     const [imageRefreshKey, setImageRefreshKey] = useState(Date.now());
     
-    // Helper para buscar ubicaciones con lógica inteligente (usado en importaciones)
+    // Helper para buscar ubicaciones con lógica ESTRICTA (usado en importaciones)
     const findLoc = (searchName: string) => {
         const sn = searchName.toLowerCase().trim();
         if (!sn) return null;
         
-        // 1. Exact Match (Nombre o ID)
-        let loc = locations.find(l => 
+        // Solo match exacto en nombre o ID. No adivinamos.
+        return locations.find(l => 
             l.name.toLowerCase().trim() === sn ||
             l.id.toLowerCase().trim() === sn
-        );
-        if (loc) return loc;
-
-        // 2. Intelligence for Central Warehouse (Bodega)
-        const centralTerms = ['bodcen', 'bodcent', 'bodega', 'central', 'bodega central', 'deposito', 'deposito central'];
-        if (centralTerms.includes(sn)) {
-            const fallback = locations.find(l => 
-                l.id.toUpperCase() === 'BODCENT' || 
-                l.id.toUpperCase() === 'BODCEN' ||
-                l.id.toLowerCase().includes('cen')
-            );
-            if (fallback) return fallback;
-        }
-
-        // 3. Fuzzy search: Start with, then contains
-        loc = locations.find(l => l.name.toLowerCase().startsWith(sn) || l.id.toLowerCase().startsWith(sn));
-        if (loc) return loc;
-
-        return locations.find(l => l.name.toLowerCase().includes(sn) || l.id.toLowerCase().includes(sn));
+        ) || null;
     };
 
     // Estado para Ajuste de Stock
@@ -462,29 +446,50 @@ const InventoryPage: React.FC = () => {
                 const newStock: Stock[] = [];
                 const newMovements: any[] = [];
                 
-                const mainLoc = locations.find(l => l.id === 'main_warehouse' || l.id === 'loc_central') || locations[0];
+                // Helper para normalizar llaves de objetos (Excel/CSV)
+                const normalizeItem = (raw: any) => {
+                    const norm: any = {};
+                    for (const k in raw) {
+                        const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
+                        norm[nk] = raw[k];
+                    }
+                    return norm;
+                };
+
+                const fallbackLoc = locations.find(l => l.id === 'main_warehouse' || l.id === 'BODCENT') || locations[0];
                 
-                data.forEach(item => {
-                    if (!item.id_venta) return;
+                data.forEach(rawItem => {
+                    const item = normalizeItem(rawItem);
+                    const idVenta = String(item.idventa || item.codigo || item.id_venta || '');
+                    if (!idVenta) return;
+
+                    const price = Number(item.price || item.precio || 0);
+                    const cost = Number(item.cost || item.costo || 0);
+                    const qty = Number(item.qty || item.cantidad || item.existencia || 0);
+                    const locName = String(item.sitio || item.ubicacion || item.almacen || item.bodega || '');
+
                     newProducts.push({
-                        id_venta: String(item.id_venta),
-                        id_fabrica: String(item.id_fabrica || ''),
-                        description: String(item.description || ''),
-                        price: Number(item.price) || 0,
-                        cost: Number(item.cost) || 0
+                        id_venta: idVenta,
+                        id_fabrica: String(item.idfabrica || item.id_fabrica || ''),
+                        description: String(item.description || item.descripcion || ''),
+                        price,
+                        cost
                     });
                     
-                    if (Number(item.qty) > 0) {
+                    if (qty > 0) {
+                        const targetLoc = locName ? (findLoc(locName) || fallbackLoc) : fallbackLoc;
+                        
                         newStock.push({
-                            productId: String(item.id_venta),
-                            locationId: mainLoc.id,
-                            quantity: Number(item.qty)
+                            productId: idVenta,
+                            locationId: targetLoc.id,
+                            quantity: qty
                         });
+
                         newMovements.push({
-                            productId: String(item.id_venta),
-                            quantity: Number(item.qty),
+                            productId: idVenta,
+                            quantity: qty,
                             type: MovementType.INITIAL_LOAD,
-                            toLocationId: mainLoc.id,
+                            toLocationId: targetLoc.id,
                             timestamp: new Date(),
                             relatedFile: file ? file.name : 'Carga Inicial'
                         });
@@ -493,7 +498,7 @@ const InventoryPage: React.FC = () => {
                 
                 await setInitialData(newProducts, newStock, newMovements);
                 setIsImportModalOpen(false);
-                addToast('Inventario inicial cargado con éxito.', 'success');
+                addToast('Inventario inicial cargado con éxito respetando ubicaciones.', 'success');
             } catch (error: any) {
                 console.error('Error procesando inventario:', error);
                 addToast(`Error al cargar el inventario: ${error.message}`, 'error');
@@ -895,6 +900,7 @@ const InventoryPage: React.FC = () => {
                                     <th key={loc.id} scope="col" className="px-4 py-3 text-center">
                                         <div className="flex flex-col items-center">
                                             <span>{loc.name}</span>
+                                            <span className="text-[9px] opacity-40 font-mono" title="ID de Ubicación">{loc.id}</span>
                                             <span className="text-[10px] font-black text-secondary bg-secondary/10 px-2 py-0.5 rounded-full mt-1 border border-secondary/20">
                                                 {locationTotals[loc.id] || 0}
                                             </span>
@@ -1022,7 +1028,20 @@ const InventoryPage: React.FC = () => {
                                                     ) : (
                                                         <div className="flex flex-col items-center justify-center group-hover:scale-110 transition-transform">
                                                             <span className={qty === 0 ? "text-text-light/30 text-xs" : "font-bold"}>{qty}</span>
-                                                            <Edit size={8} className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-primary transition-opacity" />
+                                                            <div className="absolute top-1 right-1 flex space-x-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button 
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setAuditFilter({ productId: product.id_venta, locationId: loc.id });
+                                                                        setIsAuditModalOpen(true);
+                                                                    }}
+                                                                    title="Auditar Movimientos de esta celda"
+                                                                    className="p-0.5 bg-white rounded shadow-sm text-primary hover:text-secondary"
+                                                                >
+                                                                    <Search size={10} />
+                                                                </button>
+                                                                <Edit size={8} className="text-gray-400 self-center" />
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </td>
