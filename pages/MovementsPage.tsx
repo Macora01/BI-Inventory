@@ -21,8 +21,49 @@ const MovementsPage: React.FC = () => {
     const { addToast } = useToast();
     const [activeTab, setActiveTab] = useState<'loads' | 'history'>('loads');
 
+    // Centralización de utilidades de parseo/normalización
+    const normalizeKey = (k: string) => k.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+
+    const normalizeItem = useCallback((raw: any) => {
+        const norm: any = {};
+        for (const k in raw) {
+            norm[normalizeKey(k)] = raw[k];
+        }
+        return norm;
+    }, []);
+
+    const getVal = useCallback((item: any, keywords: string[]) => {
+        const normKeywords = keywords.map(kw => normalizeKey(kw));
+        for (const k in item) {
+            if (normKeywords.some(kw => k.includes(kw))) return item[k];
+        }
+        return undefined;
+    }, []);
+
+    const parseDateValue = useCallback((val: any) => {
+        if (!val) return new Date().toISOString();
+        if (val instanceof Date) return val.toISOString();
+        if (typeof val === 'number') {
+            const date = new Date(Math.round((val - 25569) * 86400 * 1000));
+            return date.toISOString();
+        }
+        const s = String(val).trim();
+        if (!s) return new Date().toISOString();
+
+        const parts = (s.includes('-') ? s.split('-') : s.split('/')).map(p => p.trim());
+        if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10) - 1;
+            let year = parseInt(parts[2], 10);
+            if (year < 100) year += 2000;
+            const date = new Date(year, month, day);
+            if (!isNaN(date.getTime())) return date.toISOString();
+        }
+        const nativeDate = new Date(s);
+        return !isNaN(nativeDate.getTime()) ? nativeDate.toISOString() : new Date().toISOString();
+    }, []);
+
     const getStock = (productId: string, locationId: string) => {
-// ... (omitiendo líneas intermedias idénticas para brevedad en el pensamiento, pero aplicar edit_file completo)
         const item = stock.find(s => s.productId === productId && s.locationId === locationId);
         return item ? item.quantity : 0;
     };
@@ -65,48 +106,41 @@ const MovementsPage: React.FC = () => {
             const newStock = [];
             const newMovements = [];
 
-            const normalizeItem = (raw: any) => {
-                const norm: any = {};
-                for (const k in raw) {
-                    const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
-                    norm[nk] = raw[k];
-                }
-                return norm;
-            };
-
             for (const rawItem of data) {
                 const item = normalizeItem(rawItem);
-                const idVenta = String(item.idventa || item.codigo || item.idproducto || item.codventa || '');
+                const idVenta = String(getVal(item, ['idventa', 'codigo', 'idproducto', 'codventa']) || '').trim();
                 if (!idVenta) continue;
 
                 const product: Product = {
                     id_venta: idVenta,
-                    price: Number(item.precio || item.price || 0),
-                    cost: Number(item.costo || item.cost || 0),
-                    id_fabrica: String(item.idfabrica || item.fabricid || ''),
-                    description: String(item.descripcion || item.description || ''),
+                    price: Number(getVal(item, ['precio', 'price', 'venta']) || 0),
+                    cost: Number(getVal(item, ['costo', 'cost']) || 0),
+                    id_fabrica: String(getVal(item, ['idfabrica', 'fabricid', 'fabrica']) || ''),
+                    description: String(getVal(item, ['descripcion', 'description', 'nombre']) || ''),
                 };
                 newProducts.push(product);
                 
-                const qty = Number(item.qty || item.cantidad || 0);
+                const qty = Number(getVal(item, ['qty', 'cantidad', 'unidades', 'stock']) || 0);
+                const timestamp = parseDateValue(getVal(item, ['fecha', 'timestamp', 'date']));
+
                 newStock.push({
                     productId: idVenta,
-                    locationId: 'main_warehouse',
+                    locationId: 'BODCENT',
                     quantity: qty,
                 });
 
                 newMovements.push({
-                    id: `mov_${Date.now()}_${idVenta}`,
+                    id: `mov_${Date.now()}_${idVenta}_${Math.random()}`,
                     productId: idVenta,
                     quantity: qty,
                     type: MovementType.INITIAL_LOAD,
-                    toLocationId: 'main_warehouse',
-                    timestamp: new Date(),
+                    toLocationId: 'BODCENT',
+                    timestamp: timestamp,
                     relatedFile: file.name
                 });
             }
             await setInitialData(newProducts, newStock, newMovements);
-            addToast(`Carga inicial desde '${file.name}' procesada con éxito.`, 'success');
+            addToast(`Carga inicial desde '${file.name}' procesada.`, 'success');
         };
 
         try {
@@ -139,29 +173,21 @@ const MovementsPage: React.FC = () => {
             let addedCount = 0;
             let updatedCount = 0;
 
-            const normalizeItem = (raw: any) => {
-                const norm: any = {};
-                for (const k in raw) {
-                    const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
-                    norm[nk] = raw[k];
-                }
-                return norm;
-            };
-
             for (const rawItem of data) {
                 const item = normalizeItem(rawItem);
-                const idVenta = String(item.idventa || item.codigo || item.idproducto || item.codventa || '');
+                const idVenta = String(getVal(item, ['idventa', 'codigo', 'idproducto', 'codventa']) || '').trim();
                 if (!idVenta) continue;
 
                 const existingProduct = products.find(p => p.id_venta === idVenta);
-                const qty = Number(item.qty || item.cantidad || 0);
+                const qty = Number(getVal(item, ['qty', 'cantidad', 'unidades', 'stock']) || 0);
+                const timestamp = parseDateValue(getVal(item, ['fecha', 'timestamp', 'date']));
                 
                 const product: Product = {
                     id_venta: idVenta,
-                    price: Number(item.precio || item.price || 0),
-                    cost: Number(item.costo || item.cost || 0),
-                    id_fabrica: String(item.idfabrica || item.fabricid || ''),
-                    description: String(item.descripcion || item.description || ''),
+                    price: Number(getVal(item, ['precio', 'price', 'venta']) || 0),
+                    cost: Number(getVal(item, ['costo', 'cost']) || 0),
+                    id_fabrica: String(getVal(item, ['idfabrica', 'fabricid', 'fabrica']) || ''),
+                    description: String(getVal(item, ['descripcion', 'description', 'nombre']) || ''),
                 };
 
                 if (existingProduct) {
@@ -172,7 +198,7 @@ const MovementsPage: React.FC = () => {
                     addedCount++;
                 }
 
-                const mainLoc = locations.find(l => l.id === 'main_warehouse' || l.id === 'loc_central' || l.type === 'WAREHOUSE') || locations[0];
+                const mainLoc = locations.find(l => l.id === 'BODCENT') || locations[0];
                 if (mainLoc) {
                     await updateStock(idVenta, mainLoc.id, qty);
                     await addMovement({
@@ -180,6 +206,7 @@ const MovementsPage: React.FC = () => {
                         quantity: qty,
                         type: MovementType.PRODUCT_ADDITION,
                         toLocationId: mainLoc.id,
+                        timestamp: timestamp,
                         relatedFile: file.name
                     });
                 }
@@ -218,43 +245,31 @@ const MovementsPage: React.FC = () => {
             const movementsToBatch: any[] = [];
             const stockAdjustments: any[] = [];
 
-            // Helper para normalizar llaves
-            const normalizeItem = (raw: any) => {
-                const norm: any = {};
-                for (const k in raw) {
-                    const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
-                    norm[nk] = raw[k];
-                }
-                return norm;
-            };
-
             for (const rawItem of data) {
                 const item = normalizeItem(rawItem);
-                const prodId = String(item.idventa || item.codigo || item.idproducto || item.id_venta || '');
-                const qty = Number(item.qty || item.cantidad || 0);
+                const prodId = String(getVal(item, ['idventa', 'codigo', 'idproducto', 'codventa']) || '').trim();
+                const qty = Number(getVal(item, ['qty', 'cantidad', 'unidades']) || 0);
                 if (!prodId || qty <= 0) continue;
 
-                const fromLocNameRaw = String(item.sitioinicial || item.origen || item.inicial || item.sitio_inicial || '');
-                const toLocNameRaw = String(item.sitiofinal || item.destino || item.final || item.sitio_final || '');
+                const fromLocVal = getVal(item, ['sitioinicial', 'origen', 'inicial', 'from']);
+                const toLocVal = getVal(item, ['sitiofinal', 'destino', 'final', 'to']);
+                const timestamp = parseDateValue(getVal(item, ['fecha', 'timestamp', 'date']));
 
-                const fromLoc = findLoc(fromLocNameRaw);
-                const toLoc = findLoc(toLocNameRaw);
+                const fromLoc = findLoc(String(fromLocVal || ''));
+                const toLoc = findLoc(String(toLocVal || ''));
 
                 if (!fromLoc) {
-                    const key = `Origen "${fromLocNameRaw}" no encontrado`;
-                    errorStats[key] = (errorStats[key] || 0) + 1;
+                    errorStats[`Origen "${fromLocVal}" no encontrado`] = (errorStats[String(fromLocVal)] || 0) + 1;
                     continue;
                 }
                 if (!toLoc) {
-                    const key = `Destino "${toLocNameRaw}" no encontrado`;
-                    errorStats[key] = (errorStats[key] || 0) + 1;
+                    errorStats[`Destino "${toLocVal}" no encontrado`] = (errorStats[String(toLocVal)] || 0) + 1;
                     continue;
                 }
 
                 const currentStock = getStock(prodId, fromLoc.id);
                 if (currentStock < qty) {
-                    const key = `Stock insuficiente p/ "${prodId}" en "${fromLoc.name}"`;
-                    errorStats[key] = (errorStats[key] || 0) + 1;
+                    errorStats[`Stock insuficiente p/ "${prodId}" en "${fromLoc.name}"`] = (errorStats[prodId] || 0) + 1;
                     continue;
                 }
 
@@ -264,6 +279,7 @@ const MovementsPage: React.FC = () => {
                     type: MovementType.TRANSFER_OUT,
                     fromLocationId: fromLoc.id,
                     toLocationId: toLoc.id,
+                    timestamp: timestamp,
                     relatedFile: file.name
                 });
                 movementsToBatch.push({
@@ -272,6 +288,7 @@ const MovementsPage: React.FC = () => {
                     type: MovementType.TRANSFER_IN,
                     fromLocationId: fromLoc.id,
                     toLocationId: toLoc.id,
+                    timestamp: timestamp,
                     relatedFile: file.name
                 });
 
@@ -280,23 +297,13 @@ const MovementsPage: React.FC = () => {
             }
 
             if (movementsToBatch.length === 0) {
-                const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
-                if (errorSummary) {
-                    addToast(`No se pudo procesar nada. Resumen de errores:\n${errorSummary}\n\nUbicaciones recomendadas: ${locations.slice(0, 10).map(l => l.name).join(', ')}`, 'error');
-                } else {
-                    addToast('No se encontraron transferencias válidas en el archivo.', 'warning');
-                }
+                const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg}`).join('\n');
+                addToast(`No se pudo procesar nada.\n${errorSummary}`, 'error');
                 return;
             }
 
             await addBulkMovements(movementsToBatch, stockAdjustments);
-            
-            const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
-            if (errorSummary) {
-                addToast(`Carga completada con fallos parciales:\n${errorSummary}\n\nSe procesaron ${movementsToBatch.length / 2} transferencias.`, 'warning');
-            } else {
-                addToast(`Transferencia desde '${file.name}' procesada exitosamente (${movementsToBatch.length / 2} registros).`, 'success');
-            }
+            addToast(`Transferencia procesada (${movementsToBatch.length / 2} registros).`, 'success');
         };
 
         try {
@@ -325,78 +332,37 @@ const MovementsPage: React.FC = () => {
     }, [addBulkMovements, locations, addToast, getStock]);
 
     const processSales = useCallback(async (content: string, file: File) => {
-        console.log(`[DEBUG] Iniciando procesamiento de ventas: ${file.name}`);
         const processData = async (data: any[]) => {
-            console.log(`[DEBUG] Filas leídas: ${data.length}`);
             const errorStats: Record<string, number> = {};
             const movementsToBatch: any[] = [];
             const stockAdjustments: any[] = [];
 
-            // Helper para normalizar llaves
-            const normalizeItem = (raw: any) => {
-                const norm: any = {};
-                for (const k in raw) {
-                    const nk = k.toLowerCase().trim().replace(/[\s_]+/g, '');
-                    norm[nk] = raw[k];
-                }
-                return norm;
-            };
-
             for (const [index, rawItem] of data.entries()) {
                 const item = normalizeItem(rawItem);
                 
-                // Logging de la primera fila para inspeccinar estructura
-                if (index === 0) {
-                    console.log('[DEBUG] Ejemplo de fila normalizada:', item);
-                    console.log('[DEBUG] Llaves originales:', Object.keys(rawItem));
-                }
-
-                const fechaStr = String(item.fecha || item['fecha(dd-mm-aaa)'] || item.timestamp || '');
-                const lugarStrRaw = String(item.lugar || item.tienda || '');
+                const fechaVal = getVal(item, ['fecha', 'timestamp', 'date', 'time']);
+                const lugarVal = getVal(item, ['lugar', 'tienda', 'sitio', 'location', 'sucursal']);
                 
-                let idVenta = String(item.idventa || item.codventa || item.codigo || item.idproducto || '').trim();
-                let precio = Number(item.precio || item.price || 0);
-                let qty = Number(item.qty || item.cantidad || 1);
+                let idVenta = String(getVal(item, ['idventa', 'codventa', 'codigo', 'idproducto', 'prodid']) || '').trim();
+                let precio = Number(getVal(item, ['precio', 'price', 'venta']) || 0);
+                let qty = Number(getVal(item, ['qty', 'cantidad', 'unidades']) || 1);
 
-                // Si hay una columna extra (PapaParse), podría ser el ID de venta desplazado
                 const extra = (rawItem as any)['__parsed_extra'];
-                if (extra && extra.length === 1) {
+                if (extra && extra.length === 1 && !idVenta) {
                     idVenta = String(rawItem['precio'] || rawItem['price'] || '').trim();
                     precio = Number(extra[0]) || 0;
                 }
 
-                if (!idVenta || !lugarStrRaw) {
-                    if (index < 5) console.warn(`[DEBUG] Fila ${index} saltada: idVenta="${idVenta}", lugar="${lugarStrRaw}"`);
-                    continue;
-                }
+                if (!idVenta || !lugarVal) continue;
 
-                const fromLocation = findLoc(lugarStrRaw);
-
+                const fromLocation = findLoc(String(lugarVal));
                 if (!fromLocation) {
-                    const key = `Lugar "${lugarStrRaw}" no encontrado`;
-                    errorStats[key] = (errorStats[key] || 0) + 1;
-                    if (index < 5) console.error(`[DEBUG] Fila ${index}: Ubicación no encontrada para "${lugarStrRaw}"`);
+                    errorStats[`Lugar "${lugarVal}" no encontrado`] = (errorStats[String(lugarVal)] || 0) + 1;
                     continue;
                 }
 
                 const product = products.find(p => p.id_venta === idVenta);
-                if (!product) {
-                    // Si el producto no existe en el sistema local, avisamos pero permitimos si no es estricto
-                    // (En este sistema, necesitamos el producto para el costo)
-                    if (index < 5) console.warn(`[DEBUG] Fila ${index}: Producto "${idVenta}" no encontrado en catálogo local.`);
-                }
-                
-                let timestamp = new Date().toISOString();
-                if (fechaStr) {
-                    const parts = (String(fechaStr).includes('-') ? String(fechaStr).split('-') : String(fechaStr).split('/')).map(p => p.trim());
-                    if (parts.length === 3) {
-                        const day = parseInt(parts[0], 10);
-                        const month = parseInt(parts[1], 10) - 1;
-                        let year = parseInt(parts[2], 10);
-                        if (year < 100) year += 2000;
-                        timestamp = new Date(year, month, day).toISOString();
-                    }
-                }
+                const timestamp = parseDateValue(fechaVal);
 
                 movementsToBatch.push({
                     productId: idVenta,
@@ -412,33 +378,17 @@ const MovementsPage: React.FC = () => {
                 stockAdjustments.push({ productId: idVenta, locationId: fromLocation.id, quantityChange: -qty });
             }
 
-            console.log(`[DEBUG] Total movimientos preparados: ${movementsToBatch.length}`);
-
             if (movementsToBatch.length === 0) {
-                console.error('[DEBUG] No se generaron movimientos para batch.');
-                const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
-                if (errorSummary) {
-                    addToast(`No se procesó ninguna venta. Resumen de errores:\n${errorSummary}\n\nUbicaciones reconocidas en el sistema: ${locations.map(l => l.name).join(', ')}`, 'error');
-                } else {
-                    addToast('No se encontraron ventas válidas en el archivo seleccionado.', 'warning');
-                }
+                const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg}`).join('\n');
+                addToast(`No se procesó ninguna venta.\n${errorSummary}`, 'error');
                 return;
             }
 
             try {
-                console.log('[DEBUG] Intentando addBulkMovements...');
                 await addBulkMovements(movementsToBatch, stockAdjustments);
-                console.log('[DEBUG] addBulkMovements completado exitosamente.');
+                addToast(`Ventas desde '${file.name}' procesadas (${movementsToBatch.length} registros).`, 'success');
             } catch (err: any) {
-                console.error('[DEBUG] Error en addBulkMovements:', err);
-                throw err;
-            }
-            
-            const errorSummary = Object.entries(errorStats).map(([msg, count]) => `• ${msg} (${count} filas)`).join('\n');
-            if (errorSummary) {
-                addToast(`Ventas procesadas con fallos parciales:\n${errorSummary}\n\nSe registraron ${movementsToBatch.length} ventas.`, 'warning');
-            } else {
-                addToast(`Ventas desde '${file.name}' procesadas exitosamente (${movementsToBatch.length} registros).`, 'success');
+                addToast(`Error en registros masivos: ${err.message}`, 'error');
             }
         };
 

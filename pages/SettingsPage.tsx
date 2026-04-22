@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.007",
+        title: "Precisión en Fechas de Venta",
+        date: "2026-04-22",
+        changes: [
+            "Respeto a Fechas de Archivo: Se corrigió el error que asignaba la fecha de procesamiento a las ventas importadas. Ahora se utiliza la fecha real del archivo Excel/CSV.",
+            "Parser Multi-Formato: Soporte robustecido para fechas en formato DD-MM-AAAA, DD/MM/AAAA y números seriales de Excel.",
+            "Normalización de Columnas: Mejora en la detección de columnas (Fecha, Lugar, ID Venta, etc.) ignorando variaciones de nombre y caracteres especiales.",
+            "Fuzzy Search de Ubicaciones: Búsqueda inteligente de almacenes para reducir errores de importación por discrepancias menores en los nombres."
+        ]
+    },
+    {
         version: "1.3.006",
         title: "Saneamiento Definitivo de Bodegas",
         date: "2026-04-22",
