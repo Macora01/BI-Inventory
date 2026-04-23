@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.024",
+        title: "Sincronización Nuclear de Stock",
+        date: "2026-04-23",
+        changes: [
+            "Reparación Maestra: Se reescribió el motor de sincronización para que regenere el stock físico desde cero basándose en movimientos.",
+            "Eliminación de Basura: La tabla de stock ahora se purga de registros huérfanos o duplicados por ID/Nombre al realizar la sincronización.",
+            "Ajuste de Precisión: Confirmación de que los totales vuelvan a ser 1x en lugar de 2x tras la limpieza."
+        ]
+    },
+    {
         version: "1.3.023",
         title: "Reparación de Motor de Identidades",
         date: "2026-04-23",

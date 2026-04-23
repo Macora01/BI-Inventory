@@ -662,27 +662,54 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
      * Ajusta el stock a lo que digan los movimientos (Sincronización destructiva si faltan movimientos).
      */
     const syncStockFromMovements = useCallback(async () => {
-        const discrepancies = await checkConsistency();
-        if (discrepancies.length === 0) return;
+        try {
+            // 1. Calcular el stock real basado en movimientos
+            const discrepancies = await checkConsistency();
+            
+            // Si no hay discrepancias aparentes pero hay duplicados ocultos (ID vs Nombre), 
+            // el checkConsistency podría fallar al no sumar correctamente.
+            // Vamos a forzar un recalculo total.
+            
+            const realStock: { productId: string, locationId: string, quantity: number }[] = [];
+            
+            for (const loc of locations) {
+                for (const prod of products) {
+                    let calculated = 0;
+                    movements.forEach(m => {
+                        if (m.productId !== prod.id_venta) return;
+                        if (m.toLocationId === loc.id) {
+                            if (m.type !== MovementType.TRANSFER_OUT) calculated += Number(m.quantity);
+                        }
+                        if (m.fromLocationId === loc.id) {
+                            if (m.type !== MovementType.TRANSFER_IN) calculated -= Number(m.quantity);
+                        }
+                    });
+                    
+                    if (calculated !== 0) {
+                        realStock.push({ productId: prod.id_venta, locationId: loc.id, quantity: calculated });
+                    }
+                }
+            }
 
-        const stockAdjustments = discrepancies.map(d => ({
-            productId: d.productId,
-            locationId: d.locationId,
-            quantityChange: d.calculated - d.current
-        }));
+            // 2. Usar bulk-import para REEMPLAZAR completamente la tabla de stock
+            // Esto es 'Nuclear' porque elimina cualquier registro con ID sucio (ej. nombres)
+            const response = await fetch('/api/bulk-import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stock: realStock })
+            });
 
-        const response = await fetch('/api/movements/bulk', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ movements: [], stockAdjustments })
-        });
-
-        if (response.ok) {
-            await fetchData();
-        } else {
-            throw new Error('Falla al sincronizar stock');
+            if (response.ok) {
+                await fetchData();
+            } else {
+                const err = await response.json();
+                throw new Error(err.error || 'Falla al sincronizar stock nuclear');
+            }
+        } catch (err) {
+            console.error('Error in nuclear sync:', err);
+            throw err;
         }
-    }, [checkConsistency, fetchData]);
+    }, [locations, products, movements, checkConsistency, fetchData]);
 
     /**
      * Genera movimientos de Ajuste para que los movimientos coincidan con el stock actual (Ideal para cargas antiguas sin log).
