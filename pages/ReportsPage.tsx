@@ -80,34 +80,56 @@ const ReportsPage: React.FC = () => {
                 const productStocks = stock.filter(s => s.productId.trim().toUpperCase() === pid);
                 
                 if (selectedLocationId === 'all') {
-                    // Sumamos stock de todas las ubicaciones, pero evitando contar dos veces si hay IDs duplicados visualmente
+                    // Sumamos stock de todas las ubicaciones, pero unificando por ID canónico
                     const locationTotals: Record<string, number> = {};
                     
                     productStocks.forEach(s => {
-                        // Intentamos normalizar el ID de ubicación a uno conocido
                         const loc = locations.find(l => 
                             l.id.toUpperCase() === s.locationId.trim().toUpperCase() || 
                             l.name.toUpperCase() === s.locationId.trim().toUpperCase()
                         );
                         
                         const key = loc ? loc.id : s.locationId.trim().toUpperCase();
-                        locationTotals[key] = (locationTotals[key] || 0) + Number(s.quantity);
+                        
+                        // REPARACIÓN CRÍTICA: Si ya existe un valor idéntico para esta llave, 
+                        // es un registro duplicado (ID vs Nombre), NO lo sumamos de nuevo.
+                        const currentVal = locationTotals[key] || 0;
+                        const newVal = Number(s.quantity);
+                        
+                        if (currentVal === newVal) {
+                            locationTotals[key] = currentVal; // Mantenemos el que ya estaba
+                        } else {
+                            locationTotals[key] = currentVal + newVal;
+                        }
                     });
 
                     const total = Object.values(locationTotals).reduce((sum, q) => sum + q, 0);
                     if (total > 0) results[pid] = total;
                 } else {
-                    // Para una ubicación específica, buscamos por ID y por Nombre
+                    // Para una ubicación específica
                     const selected = locations.find(l => l.id === selectedLocationId);
                     const searchIds = [selectedLocationId.toUpperCase()];
                     if (selected) searchIds.push(selected.name.toUpperCase());
 
-                    const totalAtLoc = productStocks
-                        .filter(s => {
-                            const sid = s.locationId.trim().toUpperCase();
-                            return searchIds.includes(sid);
-                        })
-                        .reduce((sum, s) => sum + Number(s.quantity), 0);
+                    const variations = productStocks.filter(s => {
+                        const sid = s.locationId.trim().toUpperCase();
+                        return searchIds.includes(sid);
+                    });
+
+                    // Si hay variaciones (ej. una fila por ID y otra por Nombre), 
+                    // NO sumamos si los valores son idénticos (duplicidad detectable)
+                    let totalAtLoc = 0;
+                    const seenQuantities = new Set<number>();
+                    
+                    variations.forEach(v => {
+                        const q = Number(v.quantity);
+                        if (seenQuantities.has(q)) {
+                            // Es un duplicado exacto del valor, probablemente error de ID vs Nombre. Ignorar.
+                            return;
+                        }
+                        totalAtLoc += q;
+                        seenQuantities.add(q);
+                    });
                     
                     if (totalAtLoc > 0) results[pid] = totalAtLoc;
                 }

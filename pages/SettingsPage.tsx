@@ -10,6 +10,25 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.023",
+        title: "Reparación de Motor de Identidades",
+        date: "2026-04-23",
+        changes: [
+            "Filtro de Duplicidad Inteligente: El reporte ahora detecta si un mismo valor está repetido por error de ID/Nombre y solo cuenta una instancia.",
+            "Consolidación Conservadora: Se eliminó la suma automática de registros 'gemelos' que inflaban el inventario al doble.",
+            "Corrección ALMDOM: Verificado que los totales de 184 vuelvan a ser 92 mediante lógica de exclusión de duplicados."
+        ]
+    },
+    {
+        version: "1.3.022",
+        title: "Saneamiento de Base de Datos",
+        date: "2026-04-23",
+        changes: [
+            "Auto-Repair: Al iniciar, la app busca y fusiona registros de stock duplicados en la DB.",
+            "Normalización de Servidor: Blindaje para que no entren más IDs con minúsculas o espacios extra."
+        ]
+    },
+    {
         version: "1.3.021",
         title: "Arquitectura de Reportes Anti-Duplicación",
         date: "2026-04-23",
