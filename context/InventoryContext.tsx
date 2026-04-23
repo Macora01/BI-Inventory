@@ -266,10 +266,53 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
     }, [checkHealth]);
 
+    const repairStockData = useCallback(async () => {
+        try {
+            // Leemos el stock actual directamente de la API para asegurar frescura
+            const res = await fetch('/api/stock');
+            if (!res.ok) return false;
+            const currentStock: Stock[] = await res.json();
+            
+            const consolidated: Record<string, number> = {};
+            const finalStock: {productId: string; locationId: string; quantity: number}[] = [];
+
+            currentStock.forEach(s => {
+                const key = `${s.productId.trim().toUpperCase()}|${s.locationId.trim().toUpperCase()}`;
+                // Si ya existe la llave, es un duplicado. Sumamos para no perder historial, 
+                // pero luego el reporte usará esta versión limpia.
+                consolidated[key] = (consolidated[key] || 0) + Number(s.quantity);
+            });
+
+            if (Object.keys(consolidated).length < currentStock.length) {
+                console.log('[MAINTENANCE] Duplicados detectados. Iniciando saneamiento...');
+                for (const key in consolidated) {
+                    const [pid, lid] = key.split('|');
+                    finalStock.push({ productId: pid, locationId: lid, quantity: consolidated[key] });
+                }
+
+                // Sobreescribimos la tabla de stock con la versión unificada
+                await fetch('/api/bulk-import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ stock: finalStock })
+                });
+
+                await fetchData();
+                return true;
+            }
+            return false;
+        } catch (err) {
+            console.error('Error reparando stock:', err);
+            return false;
+        }
+    }, [fetchData]);
+
     useEffect(() => {
         fetchData();
         fetchLogo();
-    }, [fetchData, fetchLogo]);
+        // Intentar autolimpieza silenciosa en cargas
+        repairStockData();
+    }, [fetchData, fetchLogo, repairStockData]);
 
     const addMovement = useCallback(async (movementData: Omit<Movement, 'id' | 'timestamp'>) => {
         const id = generateId('mov');

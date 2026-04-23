@@ -125,10 +125,13 @@ class LocalDB {
         }
 
         if (lowerText.startsWith('insert into stock') || lowerText.includes('on conflict (productid, locationid)')) {
-            const [productId, locationId, quantity] = params;
+            let [productId, locationId, quantity] = params;
+            productId = String(productId).trim().toUpperCase();
+            locationId = String(locationId).trim().toUpperCase();
+            
             let stock = this.readTable('stock');
             const index = stock.findIndex(s => s.productId === productId && s.locationId === locationId);
-            const newStock = { productId, locationId, quantity };
+            const newStock = { productId, locationId, quantity: Number(quantity) };
             if (index >= 0) stock[index] = newStock;
             else stock.push(newStock);
             this.writeTable('stock', stock);
@@ -136,7 +139,11 @@ class LocalDB {
         }
 
         if (lowerText.startsWith('insert into movements')) {
-            const [id, productId, quantity, type, fromLocationId, toLocationId, timestamp, relatedFile, price, cost] = params;
+            let [id, productId, quantity, type, fromLocationId, toLocationId, timestamp, relatedFile, price, cost] = params;
+            productId = String(productId).trim().toUpperCase();
+            fromLocationId = fromLocationId ? String(fromLocationId).trim().toUpperCase() : null;
+            toLocationId = toLocationId ? String(toLocationId).trim().toUpperCase() : null;
+            
             let movements = this.readTable('movements');
             movements.push({ id, productId, quantity, type, fromLocationId, toLocationId, timestamp, relatedFile, price, cost });
             this.writeTable('movements', movements);
