@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.021",
+        title: "Arquitectura de Reportes Anti-Duplicación",
+        date: "2026-04-23",
+        changes: [
+            "Fusión de Identidades: Se unificaron registros que existían duplicados por ID y por Nombre, corrigiendo el error de inventario duplicado en el total global.",
+            "Búsqueda Inclusiva: Los reportes de almacenes específicos ahora recuperan datos tanto por ID como por Nombre del sitio, eliminando los reportes en cero.",
+            "Consolidación Maestra: El total de 'Todos los Almacenes' ahora coincide exactamente con la suma de las partes individuales.",
+            "Estilo: Limpieza de la barra lateral para mejor visibilidad."
+        ]
+    },
+    {
         version: "1.3.020",
         title: "Normalización de Base de Datos y Reportes",
         date: "2026-04-22",

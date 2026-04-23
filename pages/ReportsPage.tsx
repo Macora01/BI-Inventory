@@ -72,22 +72,41 @@ const ReportsPage: React.FC = () => {
         const results: Record<string, number> = {};
 
         if (isToday) {
-            // REPORTE DE HOY (O FUTURO): Basado en Stock Físico Real
+            // REPORTE DE HOY: Deduplicación y Agregación Estricta
             products.forEach(p => {
                 const pid = p.id_venta.trim().toUpperCase();
                 
+                // Mapeamos todo el stock de este producto
+                const productStocks = stock.filter(s => s.productId.trim().toUpperCase() === pid);
+                
                 if (selectedLocationId === 'all') {
-                    // Sumamos stock de todas las ubicaciones para este producto
-                    const total = stock
-                        .filter(s => s.productId.trim().toUpperCase() === pid)
-                        .reduce((sum, s) => sum + Number(s.quantity), 0);
+                    // Sumamos stock de todas las ubicaciones, pero evitando contar dos veces si hay IDs duplicados visualmente
+                    const locationTotals: Record<string, number> = {};
                     
+                    productStocks.forEach(s => {
+                        // Intentamos normalizar el ID de ubicación a uno conocido
+                        const loc = locations.find(l => 
+                            l.id.toUpperCase() === s.locationId.trim().toUpperCase() || 
+                            l.name.toUpperCase() === s.locationId.trim().toUpperCase()
+                        );
+                        
+                        const key = loc ? loc.id : s.locationId.trim().toUpperCase();
+                        locationTotals[key] = (locationTotals[key] || 0) + Number(s.quantity);
+                    });
+
+                    const total = Object.values(locationTotals).reduce((sum, q) => sum + q, 0);
                     if (total > 0) results[pid] = total;
                 } else {
-                    // Solo para la ubicación seleccionada
-                    const locId = selectedLocationId.trim().toUpperCase();
-                    const totalAtLoc = stock
-                        .filter(s => s.productId.trim().toUpperCase() === pid && s.locationId.trim().toUpperCase() === locId)
+                    // Para una ubicación específica, buscamos por ID y por Nombre
+                    const selected = locations.find(l => l.id === selectedLocationId);
+                    const searchIds = [selectedLocationId.toUpperCase()];
+                    if (selected) searchIds.push(selected.name.toUpperCase());
+
+                    const totalAtLoc = productStocks
+                        .filter(s => {
+                            const sid = s.locationId.trim().toUpperCase();
+                            return searchIds.includes(sid);
+                        })
                         .reduce((sum, s) => sum + Number(s.quantity), 0);
                     
                     if (totalAtLoc > 0) results[pid] = totalAtLoc;
@@ -114,12 +133,16 @@ const ReportsPage: React.FC = () => {
                         if (m.fromLocationId && !m.toLocationId) results[pid] -= qty;
                     }
                 } else {
-                    const locId = selectedLocationId.trim().toUpperCase();
-                    const mTo = m.toLocationId?.trim().toUpperCase();
-                    const mFrom = m.fromLocationId?.trim().toUpperCase();
+                    // Histórico por ubicación: Usamos la misma lógica inclusiva de IDs y Nombres
+                    const selected = locations.find(l => l.id === selectedLocationId);
+                    const searchIds = [selectedLocationId.toUpperCase()];
+                    if (selected) searchIds.push(selected.name.toUpperCase());
 
-                    if (mTo === locId) results[pid] += qty;
-                    if (mFrom === locId) results[pid] -= qty;
+                    const mTo = m.toLocationId?.trim().toUpperCase() || '';
+                    const mFrom = m.fromLocationId?.trim().toUpperCase() || '';
+
+                    if (searchIds.includes(mTo)) results[pid] += qty;
+                    if (searchIds.includes(mFrom)) results[pid] -= qty;
                 }
             });
         }
