@@ -166,83 +166,15 @@ async function initDb() {
             `);
             console.log('PostgreSQL Tables initialized successfully');
 
-            // --- LIMPIEZA PROFUNDA DE UBICACIONES Y STOCK (v1.3.036) ---
-            console.log('[CLEANUP] Iniciando saneamiento de integridad de datos...');
+            // --- SANEAMIENTO SEGURO DE UBICACIONES (v1.3.037) ---
+            console.log('[CLEANUP] Verificando consistencia de BODCENT...');
             
-            // 1. Recortar espacios y normalizar IDs a mayúsculas
-            await client.query('UPDATE locations SET id = TRIM(UPPER(id)), name = TRIM(name)');
-            await client.query('UPDATE products SET id_venta = TRIM(UPPER(id_venta))');
-            await client.query('UPDATE stock SET "productId" = TRIM(UPPER("productId")), "locationId" = TRIM(UPPER("locationId"))');
-            await client.query('UPDATE movements SET "productId" = TRIM(UPPER("productId")), "fromLocationId" = TRIM(UPPER("fromLocationId")), "toLocationId" = TRIM(UPPER("toLocationId"))');
-
-            // 2. Forzar Clave Primaria Única en tabla stock (evita duplicados físicos)
-            try {
-                // Eliminar duplicados antes de crear la PK si existen
-                await client.query(`
-                    DELETE FROM stock a USING (
-                        SELECT MIN(ctid) as keep_id, "productId", "locationId"
-                        FROM stock
-                        GROUP BY "productId", "locationId"
-                        HAVING COUNT(*) > 1
-                    ) b
-                    WHERE a."productId" = b."productId" 
-                    AND a."locationId" = b."locationId"
-                    AND a.ctid != b.keep_id
-                `);
-
-                // Asegurar que exista la PK
-                const pkCheck = await client.query(`
-                    SELECT count(*) FROM pg_indexes 
-                    WHERE tablename = 'stock' AND indexname = 'stock_pkey'
-                `);
-                
-                if (parseInt(pkCheck.rows[0].count) === 0) {
-                    await client.query('ALTER TABLE stock ADD PRIMARY KEY ("productId", "locationId")');
-                    console.log('[CLEANUP] Primary key added to stock table.');
-                }
-            } catch (pkErr) {
-                console.warn('[CLEANUP] Could not enforce PK on stock table:', pkErr);
-            }
-
-            // 3. Consolidación Maestra de BODCENT (v2)
-            const redundantWarehouses = await client.query(`
-                SELECT id, name FROM locations 
-                WHERE (id IN ('BODCEN', 'BODEGA', 'BOD CENT', 'BOD_CENT', 'CENTRO', 'BODCENTRAL') 
-                   OR UPPER(name) IN ('BODCENT', 'BODEGA CENTRAL', 'BOD CENT', 'CENTRO'))
-                AND id != 'BODCENT'
-            `);
-
-            if (redundantWarehouses.rows.length > 0) {
-                for (const loc of redundantWarehouses.rows) {
-                    console.log(`[CLEANUP] Fusionando bodega ${loc.id} en BODCENT...`);
-                    
-                    // Migración de Stock con Upsert atómico
-                    await client.query(`
-                        INSERT INTO stock ("productId", "locationId", quantity)
-                        SELECT "productId", 'BODCENT', quantity FROM stock WHERE "locationId" = $1
-                        ON CONFLICT ("productId", "locationId")
-                        DO UPDATE SET quantity = stock.quantity + EXCLUDED.quantity
-                    `, [loc.id]);
-
-                    // Actualizar Historial de movimientos
-                    await client.query('UPDATE movements SET "fromLocationId" = \'BODCENT\' WHERE "fromLocationId" = $1', [loc.id]);
-                    await client.query('UPDATE movements SET "toLocationId" = \'BODCENT\' WHERE "toLocationId" = $1', [loc.id]);
-
-                    // Eliminar la ubicación duplicada
-                    await client.query('DELETE FROM stock WHERE "locationId" = $1', [loc.id]);
-                    await client.query('DELETE FROM locations WHERE id = $1', [loc.id]);
-                    await logAudit('INFO', 'CLEANUP', `Bodega redundante "${loc.name}" (ID:${loc.id}) fusionada en BODCENT.`);
-                }
-            }
-
-            // 4. Garantizar BODCENT única
+            // Garantizar que BODCENT exista
             const bodcentCheck = await client.query("SELECT id FROM locations WHERE id = 'BODCENT'");
             if (bodcentCheck.rows.length === 0) {
                 await client.query("INSERT INTO locations (id, name, type) VALUES ('BODCENT', 'BODCENT', 'FIXED_STORE_PERMANENT')");
-            } else {
-                await client.query("UPDATE locations SET name = 'BODCENT' WHERE id = 'BODCENT'");
             }
-            // --- FIN LIMPIEZA PROFUNDA ---
+            // --- FIN SANEAMIENTO ---
 
             // Log de ubicaciones para diagnóstico
             const allLocs = await client.query('SELECT * FROM locations');

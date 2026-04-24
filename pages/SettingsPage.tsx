@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.037",
+        title: "Restauración de Estabilidad y Seguridad de Datos",
+        date: "2026-04-24",
+        changes: [
+            "Reversión de Limpieza Agresiva: Se eliminaron los procesos de normalización automática que causaban fallos en el arranque del servidor.",
+            "Corrección de Deduplicación: Se ajustó la lógica de sincronización para evitar la pérdida accidental de cargas legítimas realizadas el mismo día.",
+            "Modo Seguro en Inicio: El servidor ahora garantiza la persistencia de datos sin modificar IDs de productos existentes.",
+            "Consistencia de Inventario: Refuerzo en la lógica de cálculo para asegurar que los totales reflejen el historial real de movimientos."
+        ]
+    },
+    {
         version: "1.3.036",
         title: "Integridad Atómica de Datos y Reportes",
         date: "2026-04-24",

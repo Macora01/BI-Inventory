@@ -647,11 +647,9 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
                 const from = m.fromLocationId?.trim().toUpperCase() || 'NONE';
                 const to = m.toLocationId?.trim().toUpperCase() || 'NONE';
                 
-                // Llave de identidad: Si es el mismo producto, cantidad, tipo y ruta en la misma FECHA (día)
-                // lo consideramos un duplicado de carga accidental.
-                const date = new Date(m.timestamp);
-                const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-                const identityKey = `${pid}|${qty}|${type}|${from}|${to}|${dayKey}`;
+                // Llave de identidad: Si es el mismo producto, cantidad, tipo, ruta y el EXACTO mismo milisegundo,
+                // lo consideramos un duplicado técnico de la base de datos.
+                const identityKey = `${pid}|${qty}|${type}|${from}|${to}|${m.timestamp?.toString()}`;
 
                 if (!seenKeys.has(identityKey)) {
                     uniqueMovements.push(m);
