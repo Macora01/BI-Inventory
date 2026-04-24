@@ -166,43 +166,59 @@ async function initDb() {
             `);
             console.log('PostgreSQL Tables initialized successfully');
 
-            // Consolidación Maestra de Bodegas (v1.3.010 - Definintiva)
-            // Agresivamente eliminamos cualquier duplicado que se llame visualmente "Bodega Central" o IDs obsoletos
-            const allWarehouseLocs = await client.query(`
+            // --- LIMPIEZA PROFUNDA DE UBICACIONES Y STOCK (v1.3.032) ---
+            console.log('[CLEANUP] Iniciando saneamiento de integridad de datos...');
+            
+            // 1. Recortar espacios en blanco de todas las tablas críticas
+            await client.query('UPDATE locations SET id = TRIM(id), name = TRIM(name)');
+            await client.query('UPDATE products SET id_venta = TRIM(id_venta)');
+            await client.query('UPDATE stock SET "productId" = TRIM("productId"), "locationId" = TRIM("locationId")');
+            await client.query('UPDATE movements SET "productId" = TRIM("productId"), "fromLocationId" = TRIM("fromLocationId"), "toLocationId" = TRIM("toLocationId")');
+
+            // 2. Consolidación Maestra de BODCENT
+            // Buscamos cualquier ubicación que se parezca a BODCENT pero NO tenga el ID exacto 'BODCENT'
+            const redundantWarehouses = await client.query(`
                 SELECT id, name FROM locations 
-                WHERE (name = 'Bodega Central' OR name ILIKE '%Bodega Central%' OR id = 'BODCEN' OR id = 'BODEGA')
+                WHERE (UPPER(id) IN ('BODCEN', 'BODEGA', 'BOD CENT', 'BOD_CENT', 'BODCEN') 
+                   OR UPPER(name) IN ('BODCENT', 'BODEGA CENTRAL', 'BOD CENT', 'CENTRO'))
                 AND id != 'BODCENT'
             `);
-            
-            if (allWarehouseLocs.rows.length > 0) {
-                console.log('[CLEANUP] Found redundant warehouses to delete:', allWarehouseLocs.rows);
-                await logAudit('WARNING', 'CLEANUP', `Eliminando ${allWarehouseLocs.rows.length} ubicaciones obsoletas con nombre "Bodega Central".`, { found: allWarehouseLocs.rows });
-                for (const loc of allWarehouseLocs.rows) {
-                    // Mover stock remanente a BODCENT antes de borrar si es necesario, 
-                    // o simplemente borrar si el usuario ya usa BODCENT
+
+            if (redundantWarehouses.rows.length > 0) {
+                console.log('[CLEANUP] Fusionando bodegas duplicadas hacia BODCENT:', redundantWarehouses.rows);
+                for (const loc of redundantWarehouses.rows) {
+                    // Mover stock de la duplicada a la principal
+                    // Usamos UPSERT para sumar si ya existe en BODCENT
+                    const stockToMigrate = await client.query('SELECT "productId", quantity FROM stock WHERE "locationId" = $1', [loc.id]);
+                    for (const s of stockToMigrate.rows) {
+                        await client.query(`
+                            INSERT INTO stock ("productId", "locationId", quantity)
+                            VALUES ($1, 'BODCENT', $2)
+                            ON CONFLICT ("productId", "locationId")
+                            DO UPDATE SET quantity = stock.quantity + $2
+                        `, [s.productId, s.quantity]);
+                    }
+
+                    // Actualizar movimientos para mantener historial
+                    await client.query('UPDATE movements SET "fromLocationId" = \'BODCENT\' WHERE "fromLocationId" = $1', [loc.id]);
+                    await client.query('UPDATE movements SET "toLocationId" = \'BODCENT\' WHERE "toLocationId" = $1', [loc.id]);
+
+                    // Eliminar la ubicación duplicada
                     await client.query('DELETE FROM stock WHERE "locationId" = $1', [loc.id]);
-                    await client.query('DELETE FROM movements WHERE "fromLocationId" = $1 OR "toLocationId" = $1', [loc.id]);
                     await client.query('DELETE FROM locations WHERE id = $1', [loc.id]);
-                    await logAudit('INFO', 'CLEANUP', `Ubicación "${loc.name}" eliminada permanentemente.`);
+                    await logAudit('INFO', 'CLEANUP', `Ubicación duplicada "${loc.name}" (ID:${loc.id}) fusionada exitosamente en BODCENT.`);
                 }
             }
 
-            // Purga específica de datos erróneos de BI6606CL (v1.3.010)
-            console.log('[CLEANUP] Ensuring BI6606CL ghost stock is gone...');
-            await client.query(`
-                DELETE FROM stock 
-                WHERE "productId" = 'BI6606CL' AND quantity > 5000
-            `);
-
-            // Asegurar que exista BODCENT pero con el nombre que el usuario quiere (BODCENT)
+            // Asegurar que BODCENT sea la única y principal
             const bodcentCheck = await client.query("SELECT id FROM locations WHERE id = 'BODCENT'");
             if (bodcentCheck.rows.length === 0) {
                 await client.query("INSERT INTO locations (id, name, type) VALUES ('BODCENT', 'BODCENT', 'FIXED_STORE_PERMANENT')");
-                console.log('Location "BODCENT" initialized as unique master.');
             } else {
-                // CORRECCIÓN: Dejamos de forzar "Bodega Central". Usamos el ID como nombre por defecto.
-                await client.query("UPDATE locations SET name = 'BODCENT' WHERE id = 'BODCENT' AND name = 'Bodega Central'");
+                // Forzar que el nombre sea BODCENT para evitar confusión visual
+                await client.query("UPDATE locations SET name = 'BODCENT' WHERE id = 'BODCENT'");
             }
+            // --- FIN LIMPIEZA PROFUNDA ---
 
             // Log de ubicaciones para diagnóstico
             const allLocs = await client.query('SELECT * FROM locations');
@@ -562,6 +578,36 @@ async function startServer() {
             await writeDataJson('movements', movementsData);
             await writeDataJson('stock', stockData);
             res.json({ success: true, count: movements.length });
+        }
+    });
+    
+    // Delete movements (v1.3.034)
+    app.delete("/api/movements", async (req, res) => {
+        const { ids } = req.body;
+        const currentPool = getPool();
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: "Debe proporcionar una lista de IDs de movimientos" });
+        }
+
+        if (isPgActive && currentPool) {
+            try {
+                await currentPool.query("BEGIN");
+                const result = await currentPool.query('DELETE FROM movements WHERE id = ANY($1)', [ids]);
+                await currentPool.query("COMMIT");
+                res.json({ success: true, count: result.rowCount });
+            } catch (err: any) {
+                await currentPool.query("ROLLBACK").catch(() => {});
+                console.error("Error deleting movements:", err);
+                res.status(500).json({ error: err.message });
+            }
+        } else {
+            // Fallback JSON mode
+            let movementsData = await readDataJson('movements', []);
+            const beforeCount = movementsData.length;
+            movementsData = movementsData.filter((m: any) => !ids.includes(m.id));
+            await writeDataJson('movements', movementsData);
+            res.json({ success: true, count: beforeCount - movementsData.length });
         }
     });
 

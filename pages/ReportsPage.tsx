@@ -72,68 +72,64 @@ const ReportsPage: React.FC = () => {
 
         if (isToday) {
             stock.forEach(s => {
-                const pid = s.productId;
-                const lid = s.locationId;
+                const pid = s.productId.trim();
+                const lid = s.locationId.trim();
                 
                 if (selectedLocationId !== 'all') {
-                    const loc = locations.find(l => l.id === lid);
+                    const loc = locations.find(l => l.id.trim() === lid);
                     const currentLidUpper = lid.toUpperCase();
-                    const currentLnameUpper = loc?.name ? loc.name.toUpperCase() : '';
-                    const selectedCanonical = selectedLocationId.toUpperCase();
+                    const currentLnameUpper = loc?.name ? loc.name.trim().toUpperCase() : '';
+                    const selectedCanonical = selectedLocationId.trim().toUpperCase();
 
                     if (currentLidUpper !== selectedCanonical && currentLnameUpper !== selectedCanonical) return;
                 }
 
-                results[pid] = (results[pid] || 0) + Number(s.quantity);
+                // Normalización de llave para evitar duplicados por casing/espacios
+                const normalizedPid = pid.toUpperCase();
+                results[normalizedPid] = (results[normalizedPid] || 0) + Number(s.quantity);
             });
         } else {
             // REPORTE HISTÓRICO: Basado en Movimientos
             const targetDate = new Date(snapshotDate);
             targetDate.setHours(23, 59, 59, 999);
 
-            // Deduplicar movimientos para el histórico (Misma lógica que el Nuclear Sync)
-            const seenMovements = new Set();
+            // No más deduplicación por ventana de tiempo, ya se hizo en el Nuclear Sync si era necesario. 
+            // Aquí procesamos todo el historial exacto.
             movements.forEach(m => {
                 const mDate = new Date(m.timestamp);
                 if (mDate > targetDate) return;
 
                 const pid = m.productId.trim().toUpperCase();
-                const fromLid = m.fromLocationId?.trim().toUpperCase() || 'NONE';
-                const toLid = m.toLocationId?.trim().toUpperCase() || 'NONE';
-                const mKey = `${pid}|${m.quantity}|${m.type}|${fromLid}|${toLid}|${m.timestamp}`;
-
-                if (seenMovements.has(mKey)) return;
-                seenMovements.add(mKey);
+                const fromLid = m.fromLocationId?.trim().toUpperCase() || '';
+                const toLid = m.toLocationId?.trim().toUpperCase() || '';
 
                 if (!results[pid]) results[pid] = 0;
                 const qty = Number(m.quantity);
 
                 if (selectedLocationId === 'all') {
-                    if (m.type === MovementType.INITIAL_LOAD || m.type === MovementType.PRODUCT_ADDITION) results[pid] += qty;
-                    else if (m.type === MovementType.SALE) results[pid] -= qty;
+                    if (m.type === MovementType.INITIAL_LOAD || m.type === MovementType.PRODUCT_ADDITION || m.type === MovementType.TRANSFER_IN) results[pid] += qty;
+                    else if (m.type === MovementType.SALE || m.type === MovementType.TRANSFER_OUT) results[pid] -= qty;
                     else if (m.type === MovementType.REVERSION || m.type === MovementType.ADJUSTMENT) {
-                        if (m.toLocationId && !m.fromLocationId) results[pid] += qty;
-                        if (m.fromLocationId && !m.toLocationId) results[pid] -= qty;
+                        if (toLid && !fromLid) results[pid] += qty;
+                        else if (fromLid && !toLid) results[pid] -= qty;
                     }
                 } else {
-                    const selected = locations.find(l => l.id === selectedLocationId);
+                    const selected = locations.find(l => l.id.trim().toUpperCase() === selectedLocationId.toUpperCase());
                     const searchIds = [selectedLocationId.toUpperCase()];
-                    if (selected) searchIds.push(selected.name.toUpperCase());
+                    if (selected) searchIds.push(selected.name.trim().toUpperCase());
 
-                    const mTo = m.toLocationId?.trim().toUpperCase() || '';
-                    const mFrom = m.fromLocationId?.trim().toUpperCase() || '';
-
-                    if (searchIds.includes(mTo)) results[pid] += qty;
-                    if (searchIds.includes(mFrom)) results[pid] -= qty;
+                    if (toLid && searchIds.includes(toLid)) results[pid] += qty;
+                    if (fromLid && searchIds.includes(fromLid)) results[pid] -= qty;
                 }
             });
         }
 
         const formattedResults = Object.entries(results)
-            .map(([productId, quantity]) => {
-                const product = products.find(p => p.id_venta === productId);
+            .map(([pidKey, quantity]) => {
+                // Recuperar la descripción y el ID original (casing) del catálogo
+                const product = products.find(p => p.id_venta.trim().toUpperCase() === pidKey);
                 return {
-                    productId,
+                    productId: product?.id_venta || pidKey,
                     description: product?.description || 'N/A',
                     quantity
                 };

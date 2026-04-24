@@ -17,9 +17,12 @@ import { RotateCcw, History, UploadCloud, Trash2 } from 'lucide-react';
 const normalizeName = (name: string) => name.toLowerCase().replace(/[\s_]/g, '');
 
 const MovementsPage: React.FC = () => {
-    const { addMovement, updateStock, setInitialData, locations, products, movements, stock, addProduct, updateProduct, addBulkMovements, revertMovements } = useInventory();
+    const { addMovement, updateStock, setInitialData, locations, products, movements, stock, addProduct, updateProduct, addBulkMovements, revertMovements, deleteMovements } = useInventory();
     const { addToast } = useToast();
-    const [activeTab, setActiveTab] = useState<'loads' | 'history'>('loads');
+    const [activeTab, setActiveTab] = useState<'loads' | 'history' | 'manage'>('loads');
+    const [selectedMovements, setSelectedMovements] = useState<string[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Centralización de utilidades de parseo/normalización
     const normalizeKey = (k: string) => k.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
@@ -444,6 +447,34 @@ const MovementsPage: React.FC = () => {
         }
     };
 
+    const handleDeleteMovements = async (ids: string[]) => {
+        if (!confirm(`¿Estás seguro de eliminar permanentemente ${ids.length} movimientos? Esta acción NO se puede deshacer y afectará el stock calculado.`)) return;
+        setIsDeleting(true);
+        try {
+            await deleteMovements(ids);
+            addToast(`${ids.length} movimientos eliminados correctamente.`, 'success');
+            setSelectedMovements([]);
+        } catch (err: any) {
+            addToast(`Error al eliminar: ${err.message}`, 'error');
+        } finally {
+            setIsDeleting(false);
+        }
+    };
+
+    const toggleSelection = (id: string) => {
+        setSelectedMovements(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    };
+
+    const filteredMovements = useMemo(() => {
+        if (!searchTerm) return movements;
+        const lowTerm = searchTerm.toLowerCase();
+        return movements.filter(m => 
+            m.productId.toLowerCase().includes(lowTerm) ||
+            m.id.toLowerCase().includes(lowTerm) ||
+            (m.relatedFile && m.relatedFile.toLowerCase().includes(lowTerm))
+        );
+    }, [movements, searchTerm]);
+
     const groupedBatches = useMemo(() => {
         const groups: Record<string, Movement[]> = {};
         movements.forEach(m => {
@@ -485,17 +516,139 @@ const MovementsPage: React.FC = () => {
                         <History size={18} />
                         Historial
                     </button>
+                    <button 
+                        onClick={() => setActiveTab('manage')}
+                        className={`px-4 py-2 rounded-md transition-all flex items-center gap-2 ${activeTab === 'manage' ? 'bg-primary text-white shadow-lg' : 'text-text-light hover:text-primary'}`}
+                    >
+                        <Trash2 size={18} />
+                        Administrar
+                    </button>
                 </div>
             </div>
 
-            {activeTab === 'loads' ? (
+            {activeTab === 'manage' && (
+                <div className="space-y-6">
+                    <Card title="Administración del Historial">
+                        <div className="flex flex-col md:flex-row gap-4 mb-4 justify-between items-center">
+                            <div className="relative w-full md:w-96">
+                                <input 
+                                    type="text"
+                                    placeholder="Buscar por ID, Producto o Archivo..."
+                                    className="input pl-10 w-full"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                                <History className="absolute left-3 top-2.5 text-text-light" size={18} />
+                            </div>
+                            <div className="flex gap-2 w-full md:w-auto">
+                                <button 
+                                    onClick={() => setSelectedMovements(filteredMovements.slice(0, 100).map(m => m.id))}
+                                    className="btn btn-secondary flex-1 md:flex-none"
+                                >
+                                    Seleccionar 100
+                                </button>
+                                <button 
+                                    onClick={() => handleDeleteMovements(selectedMovements)}
+                                    disabled={selectedMovements.length === 0 || isDeleting}
+                                    className="btn btn-danger flex-1 md:flex-none flex items-center justify-center gap-2"
+                                >
+                                    <Trash2 size={16} />
+                                    Borrar ({selectedMovements.length})
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto max-h-[600px]">
+                            <table className="w-full text-sm text-left text-text-main">
+                                <thead className="text-xs text-primary uppercase bg-accent sticky top-0 z-10">
+                                     <tr>
+                                        <th scope="col" className="px-4 py-3">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedMovements.length > 0 && selectedMovements.length === filteredMovements.slice(0, 50).length}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedMovements(filteredMovements.slice(0, 50).map(m => m.id));
+                                                    } else {
+                                                        setSelectedMovements([]);
+                                                    }
+                                                }}
+                                            />
+                                        </th>
+                                        <th scope="col" className="px-4 py-3">Fecha</th>
+                                        <th scope="col" className="px-4 py-3">Producto</th>
+                                        <th scope="col" className="px-4 py-3">Tipo</th>
+                                        <th scope="col" className="px-4 py-3">Cantidad</th>
+                                        <th scope="col" className="px-4 py-3">Origen</th>
+                                        <th scope="col" className="px-4 py-3">Destino</th>
+                                        <th scope="col" className="px-4 py-3">Archivo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                     {filteredMovements.slice(0, 100).map(m => {
+                                        const product = products.find(p => p.id_venta === m.productId);
+                                        return (
+                                        <tr key={m.id} className={`border-b border-background transition-colors ${selectedMovements.includes(m.id) ? 'bg-primary/10' : 'bg-background-light hover:bg-accent'}`}>
+                                            <td className="px-4 py-3">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={selectedMovements.includes(m.id)}
+                                                    onChange={() => toggleSelection(m.id)}
+                                                />
+                                            </td>
+                                            <td className="px-4 py-3 text-[11px] whitespace-nowrap">
+                                                {new Date(m.timestamp).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium">{m.productId}</span>
+                                                    <span className="text-[10px] text-text-light truncate max-w-[150px]">{product?.description}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-[11px]">{MOVEMENT_TYPE_MAP[m.type] || m.type}</td>
+                                            <td className="px-4 py-3 font-bold">{m.quantity}</td>
+                                            <td className="px-4 py-3 text-[11px]">{locations.find(l => l.id === m.fromLocationId)?.name || '-'}</td>
+                                            <td className="px-4 py-3 text-[11px]">{locations.find(l => l.id === m.toLocationId)?.name || '-'}</td>
+                                            <td className="px-4 py-3 text-[10px] text-text-light truncate max-w-[100px]">{m.relatedFile || '-'}</td>
+                                        </tr>
+                                    );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="mt-4 text-xs text-text-light italic">
+                            Mostrando los últimos 100 movimientos que coinciden con la búsqueda.
+                        </div>
+                    </Card>
+                    
+                    <Card title="Reseteo Completo (Peligro)">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm text-text-light mb-2">¿Quieres borrar absolutamente todo el historial de movimientos y empezar de cero?</p>
+                                <p className="text-xs text-danger font-bold">Esto dejará el stock en 0 para todos los productos en todas las bodegas.</p>
+                            </div>
+                            <button 
+                                onClick={() => handleDeleteMovements(movements.map(m => m.id))}
+                                className="btn btn-danger-outline flex items-center gap-2"
+                            >
+                                <Trash2 size={16} />
+                                Borrar Todo ({movements.length})
+                            </button>
+                        </div>
+                    </Card>
+                </div>
+            )}
+
+            {activeTab === 'loads' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <Card title="Carga Inicial (Sobrescribe Stock)"><FileUpload onFileProcess={processInitialInventory} title="Cargar Inventario Inicial" /></Card>
                     <Card title="Adición de Productos (Suma Stock)"><FileUpload onFileProcess={processAppendInventory} title="Agregar Productos" /></Card>
                     <Card title="Transferencias (Traslados)"><FileUpload onFileProcess={processTransfers} title="Cargar Transferencia" /></Card>
                     <Card title="Ventas Diarias (Ventas)"><FileUpload onFileProcess={processSales} title="Cargar Ventas" /></Card>
                 </div>
-            ) : (
+            )}
+
+            {activeTab === 'history' && (
                 <div className="grid grid-cols-1 gap-6">
                     <Card title="Historial de Acciones Masivas (Batches)">
                         <div className="overflow-x-auto">

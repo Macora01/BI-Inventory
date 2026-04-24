@@ -10,6 +10,28 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.034",
+        title: "Gestión de Historial de Movimientos",
+        date: "2026-04-24",
+        changes: [
+            "Nueva Pestaña de Administración: Ahora puedes seleccionar y eliminar movimientos específicos del historial.",
+            "Borrado Físico: A diferencia de la reversión, esta opción elimina los registros permanentemente de la base de datos.",
+            "Reseteo de Historial: Añadida opción para borrar todo el historial y empezar de cero en casos de limpieza total.",
+            "Búsqueda y Filtros: Implementado buscador en la tabla de administración para localizar movimientos por ID, Producto o nombre de Archivo."
+        ]
+    },
+    {
+        version: "1.3.033",
+        title: "Saneamiento Profundo de Integridad (BODCENT FIX)",
+        date: "2026-04-24",
+        changes: [
+            "Fusión automática de ubicaciones duplicadas (BODCENT) a nivel de base de datos.",
+            "Trimming universal: Se eliminaron espacios fantasmas en IDs de productos y bodegas que causaban duplicados invisibles.",
+            "Corrección en Reportes: Los reportes ahora normalizan IDs en tiempo de ejecución, asegurando que BODCENT agrupe todos sus datos correctamente.",
+            "Integridad de Históricos: El cálculo de inventario histórico ahora es 100% fiel a los movimientos, sin deduplicaciones arbitrarias."
+        ]
+    },
+    {
         version: "1.3.032",
         title: "Restauración de la Integridad de Datos (Final)",
         date: "2026-04-24",

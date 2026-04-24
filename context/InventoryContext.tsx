@@ -54,12 +54,17 @@ interface InventoryContextType {
     returnAllToWarehouse: (locationId: string) => Promise<void>;
     addBulkMovements: (movements: (Omit<Movement, 'id' | 'timestamp'> & { timestamp?: Date | string })[], stockAdjustments: { productId: string, locationId: string, quantityChange: number }[]) => Promise<void>;
     revertMovements: (movements: Movement[]) => Promise<void>;
+    deleteMovements: (ids: string[]) => Promise<void>;
     
     // Auth
     currentUser: User | null;
     isAuthenticated: boolean;
     login: (username: string, password: string) => Promise<boolean>;
     logout: () => void;
+    // Missing from interface but in provider
+    checkConsistency: () => Promise<any>;
+    syncStockFromMovements: () => Promise<void>;
+    fixMovementsFromStock: () => Promise<void>;
 }
 
 const InventoryContext = createContext<InventoryContextType | undefined>(undefined);
@@ -659,9 +664,12 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
                 if (Math.abs(qty) < 0.0001) return;
                 const [pidKey, lidKey] = key.split('|');
                 
-                // Recuperar casing original
-                const originalPid = products.find(p => p.id_venta.toUpperCase() === pidKey)?.id_venta || pidKey;
-                const originalLid = locations.find(l => l.id.toUpperCase() === lidKey)?.id || lidKey;
+                // Recuperar casing original y asegurar TRIM total
+                const product = products.find(p => p.id_venta.trim().toUpperCase() === pidKey);
+                const location = locations.find(l => l.id.trim().toUpperCase() === lidKey);
+                
+                const originalPid = product?.id_venta.trim() || pidKey;
+                const originalLid = location?.id.trim() || lidKey;
 
                 finalStock.push({ productId: originalPid, locationId: originalLid, quantity: qty });
             });
@@ -736,6 +744,27 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
     }, [fetchData]);
 
+    const deleteMovements = useCallback(async (ids: string[]) => {
+        try {
+            const response = await fetch('/api/movements', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids })
+            });
+
+            if (response.ok) {
+                setMovements(prev => prev.filter(m => !ids.includes(m.id)));
+                await fetchData(); // Refrescar stock tras borrar historial
+            } else {
+                const err = await response.json();
+                throw new Error(err.error || 'Error al eliminar movimientos');
+            }
+        } catch (err: any) {
+            console.error('Error deleting movements:', err);
+            throw err;
+        }
+    }, [fetchData]);
+
     return (
         <InventoryContext.Provider value={{ 
             products, stock, movements, locations, users, 
@@ -746,7 +775,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             addLocation, updateLocation, deleteLocation,
             addUser, updateUser, deleteUser,
             loading, error, dbStatus, logo, fetchData, checkHealth, fetchLogo, addBulkMovements,
-            revertMovements,
+            revertMovements, deleteMovements,
             uploadProductImage, bulkUploadImages,
             returnAllToWarehouse,
             checkConsistency, syncStockFromMovements, fixMovementsFromStock,
