@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.025",
+        title: "Deduplicación Lógica de Movimientos",
+        date: "2026-04-23",
+        changes: [
+            "Filtro de Identidad: Se añadió un sistema que detecta y omite movimientos duplicados (mismo producto, cantidad y segundo) durante la sincronización.",
+            "Eliminación de Auto-Sync: Se desactivó la reparación automática al inicio para evitar que sume duplicados de ID/Nombre por error.",
+            "Recálculo desde Verdad Única: El inventario ahora se reconstruye ignorando el ruido histórico de importaciones duplicadas."
+        ]
+    },
+    {
         version: "1.3.024",
         title: "Sincronización Nuclear de Stock",
         date: "2026-04-23",

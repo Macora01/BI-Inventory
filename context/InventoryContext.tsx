@@ -663,19 +663,32 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
      */
     const syncStockFromMovements = useCallback(async () => {
         try {
-            // 1. Calcular el stock real basado en movimientos
-            const discrepancies = await checkConsistency();
+            // 1. Filtrar movimientos duplicados antes de calcular
+            // Un movimiento se considera duplicado si tiene mismo producto, cantidad, tipo, ubicaciones y ocurre en la misma FECHA/HORA exacta
+            const uniqueMovements: any[] = [];
+            const seen = new Set();
             
-            // Si no hay discrepancias aparentes pero hay duplicados ocultos (ID vs Nombre), 
-            // el checkConsistency podría fallar al no sumar correctamente.
-            // Vamos a forzar un recalculo total.
-            
+            // Ordenar por fecha para consistencia
+            const sortedMovements = [...movements].sort((a, b) => 
+                new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+            );
+
+            sortedMovements.forEach(m => {
+                const ts = new Date(m.timestamp).getTime();
+                // Llave de identidad: Producto + Cantidad + Tipo + Origen + Destino + Tiempo (segundo exacto)
+                const key = `${m.productId}|${m.quantity}|${m.type}|${m.fromLocationId}|${m.toLocationId}|${ts}`;
+                if (!seen.has(key)) {
+                    uniqueMovements.push(m);
+                    seen.add(key);
+                }
+            });
+
             const realStock: { productId: string, locationId: string, quantity: number }[] = [];
             
             for (const loc of locations) {
                 for (const prod of products) {
                     let calculated = 0;
-                    movements.forEach(m => {
+                    uniqueMovements.forEach(m => {
                         if (m.productId !== prod.id_venta) return;
                         if (m.toLocationId === loc.id) {
                             if (m.type !== MovementType.TRANSFER_OUT) calculated += Number(m.quantity);
@@ -691,12 +704,11 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
                 }
             }
 
-            // 2. Usar bulk-import para REEMPLAZAR completamente la tabla de stock
-            // Esto es 'Nuclear' porque elimina cualquier registro con ID sucio (ej. nombres)
+            // 2. Usar bulk-import con clearStock: true para REEMPLAZAR la tabla física
             const response = await fetch('/api/bulk-import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stock: realStock })
+                body: JSON.stringify({ stock: realStock, clearStock: true })
             });
 
             if (response.ok) {
@@ -709,7 +721,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             console.error('Error in nuclear sync:', err);
             throw err;
         }
-    }, [locations, products, movements, checkConsistency, fetchData]);
+    }, [locations, products, movements, fetchData]);
 
     /**
      * Genera movimientos de Ajuste para que los movimientos coincidan con el stock actual (Ideal para cargas antiguas sin log).

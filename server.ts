@@ -429,12 +429,18 @@ async function startServer() {
 
     // Bulk Import for Initial Inventory (Moved UP to avoid shadowing by /api/:entity)
     app.post('/api/bulk-import', async (req, res) => {
-        const { products, stock, movements } = req.body;
+        const { products, stock, movements, clearStock } = req.body;
         const currentPool = getPool();
         
         if (isPgActive && currentPool) {
             try {
                 await currentPool.query('BEGIN');
+                
+                // Si viene el flag clearStock, limpiamos la tabla de stock para eliminar basura (duplicados por ID sucio)
+                if (clearStock) {
+                    await currentPool.query('TRUNCATE TABLE stock');
+                }
+
                 if (products) {
                     for (const p of products) {
                         const keys = Object.keys(p);
@@ -471,8 +477,24 @@ async function startServer() {
                 res.status(500).json({ error: err.message });
             }
         } else {
+            if (clearStock) {
+                await writeDataJson('stock', []);
+            }
             if (products) await writeDataJson('products', products);
-            if (stock) await writeDataJson('stock', stock);
+            if (stock) {
+                if (clearStock) {
+                    await writeDataJson('stock', stock);
+                } else {
+                    const existing = await readDataJson('stock', []);
+                    const merged = [...existing];
+                    for (const s of stock) {
+                        const idx = merged.findIndex((es: any) => es.productId === s.productId && es.locationId === s.locationId);
+                        if (idx > -1) merged[idx] = s;
+                        else merged.push(s);
+                    }
+                    await writeDataJson('stock', merged);
+                }
+            }
             if (movements) await writeDataJson('movements', movements);
             res.json({ success: true });
         }
