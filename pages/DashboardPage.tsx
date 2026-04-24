@@ -18,32 +18,12 @@ const DashboardPage: React.FC = () => {
     const IVA_CHILE = 1.19;
 
     const normalizedStock = useMemo(() => {
-        if (!Array.isArray(stock) || !Array.isArray(products) || !Array.isArray(locations)) return [];
+        if (!Array.isArray(stock)) return [];
         
-        // 1. Crear mapas de traducción para normalizar IDs (sinónimos ID <-> Descripción)
-        const productMap = new Map<string, string>();
-        products.forEach(p => {
-            const pid = p.id_venta.trim().toUpperCase();
-            productMap.set(pid, p.id_venta);
-            if (p.description) productMap.set(p.description.trim().toUpperCase(), p.id_venta);
-        });
-
-        const locationMap = new Map<string, string>();
-        locations.forEach(l => {
-            const lid = l.id.trim().toUpperCase();
-            locationMap.set(lid, l.id);
-            if (l.name) locationMap.set(l.name.trim().toUpperCase(), l.id);
-        });
-
         const map = new Map<string, number>();
         stock.forEach(s => {
-            const rawPid = (s.productId || "").toString().trim().toUpperCase();
-            const rawLid = (s.locationId || "").toString().trim().toUpperCase();
-            
-            // Traducir a ID canónico
-            const pid = productMap.get(rawPid) || rawPid;
-            const lid = locationMap.get(rawLid) || rawLid;
-
+            const pid = (s.productId || "").toString();
+            const lid = (s.locationId || "").toString();
             if (!pid || !lid) return;
             const key = `${pid}|${lid}`;
             map.set(key, (map.get(key) || 0) + Number(s.quantity));
@@ -53,7 +33,7 @@ const DashboardPage: React.FC = () => {
             const [productId, locationId] = key.split('|');
             return { productId, locationId, quantity };
         });
-    }, [stock, products, locations]);
+    }, [stock]);
 
     const inventoryValue = useMemo(() => {
         if (!Array.isArray(normalizedStock) || !Array.isArray(products)) return 0;

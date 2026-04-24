@@ -71,28 +71,15 @@ const ReportsPage: React.FC = () => {
         const isToday = new Date(snapshotDate).setHours(0,0,0,0) >= new Date().setHours(0,0,0,0);
 
         if (isToday) {
-            // NORMALIZACIÓN AGRESIVA: Unificar stock por ID canónico antes de reportar
-            const productMap = new Map<string, string>();
-            products.forEach(p => {
-                const pid = p.id_venta.trim().toUpperCase();
-                productMap.set(pid, p.id_venta);
-                if (p.description) productMap.set(p.description.trim().toUpperCase(), p.id_venta);
-            });
-
             stock.forEach(s => {
-                const rawPid = s.productId.trim().toUpperCase();
-                const pid = productMap.get(rawPid) || rawPid;
+                const pid = s.productId;
+                const lid = s.locationId;
                 
-                const lid = s.locationId.trim().toUpperCase();
-                
-                // Mapear la ubicación al ID canónico del objeto locations (si existe)
-                const loc = locations.find(l => l.id.toUpperCase() === lid || l.name.toUpperCase() === lid);
-                const canonicalLid = loc ? loc.id.trim() : lid;
-
                 if (selectedLocationId !== 'all') {
-                    const selectedCanonical = selectedLocationId.trim().toUpperCase();
-                    const currentLidUpper = canonicalLid.toUpperCase();
+                    const loc = locations.find(l => l.id === lid);
+                    const currentLidUpper = lid.toUpperCase();
                     const currentLnameUpper = loc?.name ? loc.name.toUpperCase() : '';
+                    const selectedCanonical = selectedLocationId.toUpperCase();
 
                     if (currentLidUpper !== selectedCanonical && currentLnameUpper !== selectedCanonical) return;
                 }

@@ -620,115 +620,64 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
      */
     const syncStockFromMovements = useCallback(async () => {
         try {
-            // 1. Unificar Catálogos para evitar duplicados por ID/Nombre
-            const productMap = new Map<string, string>();
-            products.forEach(p => {
-                const pid = p.id_venta.trim().toUpperCase();
-                productMap.set(pid, p.id_venta);
-                if (p.description) productMap.set(p.description.trim().toUpperCase(), p.id_venta);
-            });
-            
-            const locationMap = new Map<string, string>();
-            locations.forEach(l => {
-                const lid = l.id.trim().toUpperCase();
-                locationMap.set(lid, l.id);
-                if (l.name) locationMap.set(l.name.trim().toUpperCase(), l.id);
-            });
+            // 1. Catálogos estrictos para integridad de IDs
+            const productIdsInDb = new Set(products.map(p => p.id_venta.trim().toUpperCase()));
+            const locationIdsInDb = new Set(locations.map(l => l.id.trim().toUpperCase()));
 
-            const uniqueProductIds = Array.from(new Set(products.map(p => p.id_venta.trim().toUpperCase())));
-            const uniqueLocationIds = Array.from(new Set(locations.map(l => l.id.trim().toUpperCase())));
+            const realStockMap = new Map<string, number>();
 
-            // 2. Filtrar movimientos duplicados de forma agresiva (Mismo producto, cantidad, tipo, ubicaciones y día)
-            const uniqueMovements: any[] = [];
-            const seenMovements = new Set();
-            
-            const sortedMovements = [...movements].sort((a, b) => 
-                new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-            );
+            // 2. Procesar TODO el historial de movimientos sin filtros de "ventana de tiempo"
+            // No intentamos adivinar duplicados por proximidad temporal. Si existe en la DB, cuenta.
+            movements.forEach(m => {
+                const pid = m.productId?.trim().toUpperCase();
+                const fromLid = m.fromLocationId?.trim().toUpperCase();
+                const toLid = m.toLocationId?.trim().toUpperCase();
+                const qty = Number(m.quantity) || 0;
 
-            sortedMovements.forEach(m => {
-                const pidRaw = m.productId?.trim().toUpperCase();
-                const fromLidRaw = m.fromLocationId?.trim().toUpperCase() || 'NONE';
-                const toLidRaw = m.toLocationId?.trim().toUpperCase() || 'NONE';
-                
-                // Traducir a IDs canónicos si es posible
-                const pid = productMap.get(pidRaw) || pidRaw;
-                const fromLid = locationMap.get(fromLidRaw) || (fromLidRaw === 'NONE' ? 'NONE' : fromLidRaw);
-                const toLid = locationMap.get(toLidRaw) || (toLidRaw === 'NONE' ? 'NONE' : toLidRaw);
-                
-                // Llave de identidad: Producto + Cantidad + Tipo + Origen + Destino + Timestamp EXACTO
-                const key = `${pid}|${m.quantity}|${m.type}|${fromLid}|${toLid}|${m.timestamp}`;
-                
-                if (!seenMovements.has(key)) {
-                    uniqueMovements.push({
-                        ...m,
-                        productId: pid,
-                        fromLocationId: fromLid === 'NONE' ? null : fromLid,
-                        toLocationId: toLid === 'NONE' ? null : toLid
-                    });
-                    seenMovements.add(key);
-                }
-            });
+                if (!pid || !productIdsInDb.has(pid)) return;
 
-            // 3. Calcular Stock Real sobre la base unificada
-            const realStock: { productId: string, locationId: string, quantity: number }[] = [];
-            
-            for (const lid of uniqueLocationIds) {
-                const canonicalLid = locationMap.get(lid) || lid; // Fallback al ID original si no hay mapa
-                for (const pid of uniqueProductIds) {
-                    const canonicalPid = productMap.get(pid) || pid; // Fallback al ID original si no hay mapa
-                    let calculated = 0;
-                    uniqueMovements.forEach(m => {
-                        // Comparación flexible: traducimos el ID del movimiento a la forma canónica
-                        const mPidRaw = m.productId?.trim().toUpperCase();
-                        const mPidCanonical = productMap.get(mPidRaw) || mPidRaw;
-                        
-                        if (mPidCanonical === canonicalPid) {
-                            const mLidFrom = m.fromLocationId?.trim().toUpperCase();
-                            const mLidTo = m.toLocationId?.trim().toUpperCase();
-                            
-                            const mFromCanonical = locationMap.get(mLidFrom) || mLidFrom;
-                            const mToCanonical = locationMap.get(mLidTo) || mLidTo;
-
-                            if (mToCanonical === canonicalLid) {
-                                if (m.type !== MovementType.TRANSFER_OUT) calculated += Number(m.quantity);
-                            }
-                            if (mFromCanonical === canonicalLid) {
-                                if (m.type !== MovementType.TRANSFER_IN) calculated -= Number(m.quantity);
-                            }
-                        }
-                    });
-                    
-                    if (calculated !== 0) {
-                        realStock.push({ 
-                            productId: canonicalPid, 
-                            locationId: canonicalLid, 
-                            quantity: calculated 
-                        });
+                // Sumar al destino
+                if (toLid && locationIdsInDb.has(toLid)) {
+                    if (m.type !== MovementType.TRANSFER_OUT) {
+                        const key = `${pid}|${toLid}`;
+                        realStockMap.set(key, (realStockMap.get(key) || 0) + qty);
                     }
                 }
-            }
 
-            // 4. Reset Físico (Nuclear): Borrar todo y escribir la verdad calculada
-            // FILTRO DE SEGURIDAD: Solo enviar si el ID existe en la tabla maestra (evita error 500 FK)
-            const productIdsInDb = new Set(products.map(p => p.id_venta));
-            const locationIdsInDb = new Set(locations.map(l => l.id));
+                // Restar al origen
+                if (fromLid && locationIdsInDb.has(fromLid)) {
+                    if (m.type !== MovementType.TRANSFER_IN) {
+                        const key = `${pid}|${fromLid}`;
+                        realStockMap.set(key, (realStockMap.get(key) || 0) - qty);
+                    }
+                }
+            });
 
-            const validStock = realStock.filter(s => 
-                productIdsInDb.has(s.productId) && locationIdsInDb.has(s.locationId)
-            );
+            // 3. Reconstruir lista de stock final
+            const finalStock: { productId: string, locationId: string, quantity: number }[] = [];
+            realStockMap.forEach((qty, key) => {
+                if (Math.abs(qty) < 0.0001) return;
+                const [pidKey, lidKey] = key.split('|');
+                
+                // Recuperar casing original
+                const originalPid = products.find(p => p.id_venta.toUpperCase() === pidKey)?.id_venta || pidKey;
+                const originalLid = locations.find(l => l.id.toUpperCase() === lidKey)?.id || lidKey;
 
+                finalStock.push({ productId: originalPid, locationId: originalLid, quantity: qty });
+            });
+
+            // 4. Reset Físico: Limpiar tabla stock y escribir balances calculados
             const response = await fetch('/api/bulk-import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stock: validStock, clearStock: true })
+                body: JSON.stringify({ stock: finalStock, clearStock: true })
             });
 
             if (response.ok) {
                 await fetchData();
             } else {
                 const err = await response.json();
-                throw new Error(err.error || 'Falla al sincronizar stock nuclear');
+                throw new Error(err.error || 'Error al sincronizar stock nuclear');
             }
         } catch (err) {
             console.error('Error in nuclear sync:', err);

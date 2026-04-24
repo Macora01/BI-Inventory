@@ -10,6 +10,26 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.032",
+        title: "Restauración de la Integridad de Datos (Final)",
+        date: "2026-04-24",
+        changes: [
+            "Precisión Absoluta: Eliminada la lógica de ventanas de tiempo en la sincronización. Ahora se procesa cada movimiento de forma individual y exacta.",
+            "Normalización Transparente: El sistema ya no intenta 'adivinar' identidades por descripción, usando estrictamente los códigos de producto (ID Venta).",
+            "Interfaz Refactorizada: El Dashboard y los Reportes ahora muestran el stock real sin capas de agregación artificiales que causaban confusión visual."
+        ]
+    },
+    {
+        version: "1.3.031",
+        title: "Deduplicación por Ventana de Tiempo",
+        date: "2026-04-24",
+        changes: [
+            "Filtro de Proximidad: La sincronización ahora detecta duplicados dentro de la misma hora, eliminando el efecto de múltiples importaciones accidentales.",
+            "Normalización de Identidad: Se mapearon descripciones y nombres de bodegas a sus IDs canónicos para evitar el doble conteo histórico.",
+            "Consolidación Nuclear: El stock se recalcula desde cero ignorando el ruido de los registros de auditoría duplicados."
+        ]
+    },
+    {
         version: "1.3.030",
         title: "Perfeccionamiento de la Lógica de Consolidación",
         date: "2026-04-24",
