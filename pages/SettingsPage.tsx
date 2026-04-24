@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.030",
+        title: "Perfeccionamiento de la Lógica de Consolidación",
+        date: "2026-04-24",
+        changes: [
+            "Filtro de Identidad: Se corrigió un error en el motor de sincronización que podía duplicar valores al procesar sinónimos.",
+            "Interfaz Resiliente: El dashboard ahora unifica automáticamente entradas duplicadas por nombre/código antes de mostrar totales.",
+            "Normalización Universal: Corregida la comparación de ubicaciones para ignorar diferencias de mayúsculas y espacios en reportes."
+        ]
+    },
+    {
         version: "1.3.029",
         title: "Recuperación de Integridad de Datos",
         date: "2026-04-24",

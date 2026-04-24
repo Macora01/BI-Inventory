@@ -652,7 +652,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
                 const toLidRaw = m.toLocationId?.trim().toUpperCase() || 'NONE';
                 
                 // Traducir a IDs canónicos si es posible
-                const pid = productMap.get(pidRaw) ? pidRaw : pidRaw;
+                const pid = productMap.get(pidRaw) || pidRaw;
                 const fromLid = locationMap.get(fromLidRaw) || (fromLidRaw === 'NONE' ? 'NONE' : fromLidRaw);
                 const toLid = locationMap.get(toLidRaw) || (toLidRaw === 'NONE' ? 'NONE' : toLidRaw);
                 
@@ -679,13 +679,21 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
                     const canonicalPid = productMap.get(pid) || pid; // Fallback al ID original si no hay mapa
                     let calculated = 0;
                     uniqueMovements.forEach(m => {
-                        // Comparación flexible: intentamos match exacto normalizado o match por nombre
-                        const mPid = m.productId?.trim().toUpperCase();
-                        if (mPid === pid) {
-                            if (m.toLocationId?.trim().toUpperCase() === lid) {
+                        // Comparación flexible: traducimos el ID del movimiento a la forma canónica
+                        const mPidRaw = m.productId?.trim().toUpperCase();
+                        const mPidCanonical = productMap.get(mPidRaw) || mPidRaw;
+                        
+                        if (mPidCanonical === canonicalPid) {
+                            const mLidFrom = m.fromLocationId?.trim().toUpperCase();
+                            const mLidTo = m.toLocationId?.trim().toUpperCase();
+                            
+                            const mFromCanonical = locationMap.get(mLidFrom) || mLidFrom;
+                            const mToCanonical = locationMap.get(mLidTo) || mLidTo;
+
+                            if (mToCanonical === canonicalLid) {
                                 if (m.type !== MovementType.TRANSFER_OUT) calculated += Number(m.quantity);
                             }
-                            if (m.fromLocationId?.trim().toUpperCase() === lid) {
+                            if (mFromCanonical === canonicalLid) {
                                 if (m.type !== MovementType.TRANSFER_IN) calculated -= Number(m.quantity);
                             }
                         }
