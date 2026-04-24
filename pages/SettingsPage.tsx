@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.027",
+        title: "Protocolo de Sanitización Total",
+        date: "2026-04-24",
+        changes: [
+            "Dashboard Inmune: El tablero ahora unifica datos dinámicamente, ignorando cualquier basura que quede en la base de datos.",
+            "Nuclear Sync v2: El motor de sincronización ahora consolida catálogos de Productos y Bodegas antes de recalcular el stock.",
+            "Normalización Agresiva: Se filtran movimientos duplicados por día y se normalizan todos los IDs a mayúsculas para evitar 'ALMDOM' vs 'almdom'.",
+            "IMPORTANTE: Ejecutar 'CONFIGURACIÓN > SINCRONIZAR STOCK' para purgar físicamente los duplicados históricos."
+        ]
+    },
+    {
         version: "1.3.026",
         title: "Deduplicación Agresiva y Estabilidad",
         date: "2026-04-24",

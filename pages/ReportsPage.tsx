@@ -67,83 +67,46 @@ const ReportsPage: React.FC = () => {
         setReportType('inventory');
         setActiveRange('inventory');
         
+        const results: Record<string, number> = {};
         const isToday = new Date(snapshotDate).setHours(0,0,0,0) >= new Date().setHours(0,0,0,0);
 
-        const results: Record<string, number> = {};
-
         if (isToday) {
-            // REPORTE DE HOY: Deduplicación y Agregación Estricta
-            products.forEach(p => {
-                const pid = p.id_venta.trim().toUpperCase();
+            // NORMALIZACIÓN AGRESIVA: Unificar stock por ID canónico antes de reportar
+            stock.forEach(s => {
+                const pid = s.productId.trim().toUpperCase();
+                const lid = s.locationId.trim().toUpperCase();
                 
-                // Mapeamos todo el stock de este producto
-                const productStocks = stock.filter(s => s.productId.trim().toUpperCase() === pid);
-                
-                if (selectedLocationId === 'all') {
-                    // Sumamos stock de todas las ubicaciones, pero unificando por ID canónico
-                    const locationTotals: Record<string, number> = {};
-                    
-                    productStocks.forEach(s => {
-                        const loc = locations.find(l => 
-                            l.id.toUpperCase() === s.locationId.trim().toUpperCase() || 
-                            l.name.toUpperCase() === s.locationId.trim().toUpperCase()
-                        );
-                        
-                        const key = loc ? loc.id : s.locationId.trim().toUpperCase();
-                        
-                        // REPARACIÓN CRÍTICA: Si ya existe un valor idéntico para esta llave, 
-                        // es un registro duplicado (ID vs Nombre), NO lo sumamos de nuevo.
-                        const currentVal = locationTotals[key] || 0;
-                        const newVal = Number(s.quantity);
-                        
-                        if (currentVal === newVal) {
-                            locationTotals[key] = currentVal; // Mantenemos el que ya estaba
-                        } else {
-                            locationTotals[key] = currentVal + newVal;
-                        }
-                    });
+                // Mapear la ubicación al ID canónico del objeto locations (si existe)
+                const loc = locations.find(l => l.id.toUpperCase() === lid || l.name.toUpperCase() === lid);
+                const canonicalLid = loc ? loc.id.trim().toUpperCase() : lid;
 
-                    const total = Object.values(locationTotals).reduce((sum, q) => sum + q, 0);
-                    if (total > 0) results[pid] = total;
-                } else {
-                    // Para una ubicación específica
-                    const selected = locations.find(l => l.id === selectedLocationId);
-                    const searchIds = [selectedLocationId.toUpperCase()];
-                    if (selected) searchIds.push(selected.name.toUpperCase());
-
-                    const variations = productStocks.filter(s => {
-                        const sid = s.locationId.trim().toUpperCase();
-                        return searchIds.includes(sid);
-                    });
-
-                    // Si hay variaciones (ej. una fila por ID y otra por Nombre), 
-                    // NO sumamos si los valores son idénticos (duplicidad detectable)
-                    let totalAtLoc = 0;
-                    const seenQuantities = new Set<number>();
-                    
-                    variations.forEach(v => {
-                        const q = Number(v.quantity);
-                        if (seenQuantities.has(q)) {
-                            // Es un duplicado exacto del valor, probablemente error de ID vs Nombre. Ignorar.
-                            return;
-                        }
-                        totalAtLoc += q;
-                        seenQuantities.add(q);
-                    });
-                    
-                    if (totalAtLoc > 0) results[pid] = totalAtLoc;
+                if (selectedLocationId !== 'all') {
+                    const selectedCanonical = selectedLocationId.trim().toUpperCase();
+                    if (canonicalLid !== selectedCanonical) return;
                 }
+
+                results[pid] = (results[pid] || 0) + Number(s.quantity);
             });
         } else {
             // REPORTE HISTÓRICO: Basado en Movimientos
             const targetDate = new Date(snapshotDate);
             targetDate.setHours(23, 59, 59, 999);
 
+            // Deduplicar movimientos para el histórico (Misma lógica que el Nuclear Sync)
+            const seenMovements = new Set();
             movements.forEach(m => {
                 const mDate = new Date(m.timestamp);
                 if (mDate > targetDate) return;
 
+                const dayKey = `${mDate.getFullYear()}-${mDate.getMonth()}-${mDate.getDate()}`;
                 const pid = m.productId.trim().toUpperCase();
+                const fromLid = m.fromLocationId?.trim().toUpperCase() || 'NONE';
+                const toLid = m.toLocationId?.trim().toUpperCase() || 'NONE';
+                const mKey = `${pid}|${m.quantity}|${m.type}|${fromLid}|${toLid}|${dayKey}`;
+
+                if (seenMovements.has(mKey)) return;
+                seenMovements.add(mKey);
+
                 if (!results[pid]) results[pid] = 0;
                 const qty = Number(m.quantity);
 
@@ -155,7 +118,6 @@ const ReportsPage: React.FC = () => {
                         if (m.fromLocationId && !m.toLocationId) results[pid] -= qty;
                     }
                 } else {
-                    // Histórico por ubicación: Usamos la misma lógica inclusiva de IDs y Nombres
                     const selected = locations.find(l => l.id === selectedLocationId);
                     const searchIds = [selectedLocationId.toUpperCase()];
                     if (selected) searchIds.push(selected.name.toUpperCase());

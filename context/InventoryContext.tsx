@@ -620,13 +620,14 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
      */
     const syncStockFromMovements = useCallback(async () => {
         try {
-            // 1. Filtrar movimientos duplicados de forma agresiva
-            // Un movimiento es duplicado si tiene mismo producto, cantidad, tipo y ubicaciones
-            // AND ocurre en el mismo día (evitamos problemas de segundos/milisegundos en importaciones)
+            // 1. Unificar Catálogos para evitar duplicados por ID/Nombre
+            const uniqueProductIds = Array.from(new Set(products.map(p => p.id_venta.trim().toUpperCase())));
+            const uniqueLocationIds = Array.from(new Set(locations.map(l => l.id.trim().toUpperCase())));
+
+            // 2. Filtrar movimientos duplicados de forma agresiva (Mismo producto, cantidad, tipo, ubicaciones y día)
             const uniqueMovements: any[] = [];
-            const seen = new Set();
+            const seenMovements = new Set();
             
-            // Ordenar por fecha para consistencia
             const sortedMovements = [...movements].sort((a, b) => 
                 new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
             );
@@ -634,29 +635,35 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             sortedMovements.forEach(m => {
                 const d = new Date(m.timestamp);
                 const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+                const pid = m.productId.trim().toUpperCase();
+                const fromLid = m.fromLocationId?.trim().toUpperCase() || 'NONE';
+                const toLid = m.toLocationId?.trim().toUpperCase() || 'NONE';
                 
-                // Llave de identidad de negocio: Producto + Cantidad + Tipo + Origen + Destino + Día
-                const key = `${m.productId.trim().toUpperCase()}|${m.quantity}|${m.type}|${m.fromLocationId?.trim().toUpperCase()}|${m.toLocationId?.trim().toUpperCase()}|${dayKey}`;
+                const key = `${pid}|${m.quantity}|${m.type}|${fromLid}|${toLid}|${dayKey}`;
                 
-                if (!seen.has(key)) {
-                    uniqueMovements.push(m);
-                    seen.add(key);
+                if (!seenMovements.has(key)) {
+                    uniqueMovements.push({
+                        ...m,
+                        productId: pid,
+                        fromLocationId: fromLid === 'NONE' ? null : fromLid,
+                        toLocationId: toLid === 'NONE' ? null : toLid
+                    });
+                    seenMovements.add(key);
                 }
             });
 
+            // 3. Calcular Stock Real sobre la base unificada
             const realStock: { productId: string, locationId: string, quantity: number }[] = [];
             
-            for (const loc of locations) {
-                const lid = loc.id.trim().toUpperCase();
-                for (const prod of products) {
-                    const pid = prod.id_venta.trim().toUpperCase();
+            for (const lid of uniqueLocationIds) {
+                for (const pid of uniqueProductIds) {
                     let calculated = 0;
                     uniqueMovements.forEach(m => {
-                        if (m.productId.trim().toUpperCase() !== pid) return;
-                        if (m.toLocationId?.trim().toUpperCase() === lid) {
+                        if (m.productId !== pid) return;
+                        if (m.toLocationId === lid) {
                             if (m.type !== MovementType.TRANSFER_OUT) calculated += Number(m.quantity);
                         }
-                        if (m.fromLocationId?.trim().toUpperCase() === lid) {
+                        if (m.fromLocationId === lid) {
                             if (m.type !== MovementType.TRANSFER_IN) calculated -= Number(m.quantity);
                         }
                     });
@@ -667,7 +674,7 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
                 }
             }
 
-            // 2. Usar bulk-import con clearStock: true para REEMPLAZAR la tabla física
+            // 4. Reset Físico (Nuclear): Borrar todo y escribir la verdad calculada
             const response = await fetch('/api/bulk-import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

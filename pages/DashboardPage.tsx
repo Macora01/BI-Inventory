@@ -17,28 +17,44 @@ const DashboardPage: React.FC = () => {
 
     const IVA_CHILE = 1.19;
 
+    const normalizedStock = useMemo(() => {
+        if (!Array.isArray(stock)) return [];
+        const map = new Map<string, number>();
+        stock.forEach(s => {
+            const pid = (s.productId || "").trim().toUpperCase();
+            const lid = (s.locationId || "").trim().toUpperCase();
+            if (!pid || !lid) return;
+            const key = `${pid}|${lid}`;
+            map.set(key, (map.get(key) || 0) + Number(s.quantity));
+        });
+        return Array.from(map.entries()).map(([key, quantity]) => {
+            const [productId, locationId] = key.split('|');
+            return { productId, locationId, quantity };
+        });
+    }, [stock]);
+
     const inventoryValue = useMemo(() => {
-        if (!Array.isArray(stock) || !Array.isArray(products)) return 0;
-        return stock.reduce((total, s) => {
+        if (!Array.isArray(normalizedStock) || !Array.isArray(products)) return 0;
+        return normalizedStock.reduce((total, s) => {
             const product = products.find(p => p.id_venta === s.productId);
             return total + (product ? Number(product.cost) * Number(s.quantity) : 0);
         }, 0);
-    }, [stock, products]);
+    }, [normalizedStock, products]);
 
     const potentialRevenue = useMemo(() => {
-        if (!Array.isArray(stock) || !Array.isArray(products)) return 0;
-        return stock.reduce((total, s) => {
+        if (!Array.isArray(normalizedStock) || !Array.isArray(products)) return 0;
+        return normalizedStock.reduce((total, s) => {
             const product = products.find(p => p.id_venta === s.productId);
             return total + (product ? Number(product.price) * Number(s.quantity) : 0);
         }, 0);
-    }, [stock, products]);
+    }, [normalizedStock, products]);
 
     const potentialMargin = (potentialRevenue / IVA_CHILE) - inventoryValue;
     
     const totalUnits = useMemo(() => {
-        if (!Array.isArray(stock)) return 0;
-        return stock.reduce((sum, s) => sum + Number(s.quantity), 0);
-    }, [stock]);
+        if (!Array.isArray(normalizedStock)) return 0;
+        return normalizedStock.reduce((sum, s) => sum + Number(s.quantity), 0);
+    }, [normalizedStock]);
 
     const totalSoldUnits = useMemo(() => {
         if (!Array.isArray(movements)) return 0;
@@ -57,9 +73,9 @@ const DashboardPage: React.FC = () => {
     const netSalesAmount = totalSalesAmount / IVA_CHILE;
     
     const lowStockItems = useMemo(() => {
-        if (!Array.isArray(stock) || !Array.isArray(products)) return 0;
+        if (!Array.isArray(normalizedStock) || !Array.isArray(products)) return 0;
         
-        const totalStockByProduct = stock.reduce((acc, s) => {
+        const totalStockByProduct = normalizedStock.reduce((acc, s) => {
             acc[s.productId] = (acc[s.productId] || 0) + Number(s.quantity);
             return acc;
         }, {} as Record<string, number>);
@@ -95,10 +111,10 @@ const DashboardPage: React.FC = () => {
     }, [movements, products]);
 
     const stockDistribution = useMemo(() => {
-        if (!Array.isArray(stock) || !Array.isArray(locations)) return [];
+        if (!Array.isArray(normalizedStock) || !Array.isArray(locations)) return [];
         
-        const distribution = stock.reduce((acc, s) => {
-            const location = locations.find(l => l.id === s.locationId);
+        const distribution = normalizedStock.reduce((acc, s) => {
+            const location = locations.find(l => l.id.toUpperCase() === s.locationId.toUpperCase());
             const name = location ? location.name : 'Desconocido';
             acc[name] = (acc[name] || 0) + Number(s.quantity);
             return acc;
