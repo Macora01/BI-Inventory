@@ -98,11 +98,10 @@ const ReportsPage: React.FC = () => {
                 const mDate = new Date(m.timestamp);
                 if (mDate > targetDate) return;
 
-                const dayKey = `${mDate.getFullYear()}-${mDate.getMonth()}-${mDate.getDate()}`;
                 const pid = m.productId.trim().toUpperCase();
                 const fromLid = m.fromLocationId?.trim().toUpperCase() || 'NONE';
                 const toLid = m.toLocationId?.trim().toUpperCase() || 'NONE';
-                const mKey = `${pid}|${m.quantity}|${m.type}|${fromLid}|${toLid}|${dayKey}`;
+                const mKey = `${pid}|${m.quantity}|${m.type}|${fromLid}|${toLid}|${m.timestamp}`;
 
                 if (seenMovements.has(mKey)) return;
                 seenMovements.add(mKey);

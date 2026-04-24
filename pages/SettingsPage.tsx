@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.028",
+        title: "Reparación del Motor de Sincronización",
+        date: "2026-04-24",
+        changes: [
+            "Corrección de Error Crítico: Se solucionó la falla en la sincronización causada por discrepancias de mayúsculas/minúsculas en los IDs (ej. 'ALMDOM' vs 'almdom').",
+            "Mapeo de Identidad Canónica: El sistema ahora respeta las claves originales de la base de datos para evitar violaciones de integridad referencial.",
+            "Deduplicación Selectiva: Se refinó el cálculo para que las unidades totales coincidan con la realidad física, eliminando el efecto de doble conteo."
+        ]
+    },
+    {
         version: "1.3.027",
         title: "Protocolo de Sanitización Total",
         date: "2026-04-24",

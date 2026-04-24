@@ -76,16 +76,18 @@ const DashboardPage: React.FC = () => {
         if (!Array.isArray(normalizedStock) || !Array.isArray(products)) return 0;
         
         const totalStockByProduct = normalizedStock.reduce((acc, s) => {
-            acc[s.productId] = (acc[s.productId] || 0) + Number(s.quantity);
+            const pid = s.productId.toUpperCase();
+            acc[pid] = (acc[pid] || 0) + Number(s.quantity);
             return acc;
         }, {} as Record<string, number>);
 
         return products.filter(product => {
-            const totalStock = totalStockByProduct[product.id_venta] || 0;
+            const pid = product.id_venta.trim().toUpperCase();
+            const totalStock = totalStockByProduct[pid] || 0;
             const minStock = product.minStock ?? 2;
             return totalStock < minStock;
         }).length;
-    }, [stock, products]);
+    }, [normalizedStock, products]);
 
     const topSellingProducts = useMemo(() => {
         if (!Array.isArray(movements) || !Array.isArray(products)) return [];
@@ -114,8 +116,12 @@ const DashboardPage: React.FC = () => {
         if (!Array.isArray(normalizedStock) || !Array.isArray(locations)) return [];
         
         const distribution = normalizedStock.reduce((acc, s) => {
-            const location = locations.find(l => l.id.toUpperCase() === s.locationId.toUpperCase());
-            const name = location ? location.name : 'Desconocido';
+            const sid = s.locationId.toUpperCase();
+            const location = locations.find(l => 
+                l.id.toUpperCase() === sid || 
+                l.name.toUpperCase() === sid
+            );
+            const name = location ? location.name : s.locationId;
             acc[name] = (acc[name] || 0) + Number(s.quantity);
             return acc;
         }, {} as Record<string, number>);
@@ -123,7 +129,7 @@ const DashboardPage: React.FC = () => {
         return (Object.entries(distribution) as [string, number][])
             .filter(([_, value]) => value > 0)
             .map(([name, value]) => ({ name, value }));
-    }, [stock, locations]);
+    }, [normalizedStock, locations]);
 
     const salesTrend = useMemo(() => {
         if (!Array.isArray(movements)) return [];

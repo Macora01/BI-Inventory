@@ -621,7 +621,20 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
     const syncStockFromMovements = useCallback(async () => {
         try {
             // 1. Unificar Catálogos para evitar duplicados por ID/Nombre
-            const uniqueProductIds = Array.from(new Set(products.map(p => p.id_venta.trim().toUpperCase())));
+            // Guardamos el mapeo de UPCASE -> ORIGINAL para respetar la FK de base de datos
+            const productMap = new Map<string, string>();
+            products.forEach(p => productMap.set(p.id_venta.trim().toUpperCase(), p.id_venta));
+            
+            const locationMap = new Map<string, string>();
+            locations.forEach(l => {
+                locationMap.set(l.id.trim().toUpperCase(), l.id);
+                // CRÍTICO: También mapeamos el nombre, por si el movimiento trae el nombre como ID
+                if (l.name) {
+                    locationMap.set(l.name.trim().toUpperCase(), l.id);
+                }
+            });
+
+            const uniqueProductIds = Array.from(productMap.keys());
             const uniqueLocationIds = Array.from(new Set(locations.map(l => l.id.trim().toUpperCase())));
 
             // 2. Filtrar movimientos duplicados de forma agresiva (Mismo producto, cantidad, tipo, ubicaciones y día)
@@ -633,13 +646,17 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             );
 
             sortedMovements.forEach(m => {
-                const d = new Date(m.timestamp);
-                const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-                const pid = m.productId.trim().toUpperCase();
-                const fromLid = m.fromLocationId?.trim().toUpperCase() || 'NONE';
-                const toLid = m.toLocationId?.trim().toUpperCase() || 'NONE';
+                const pidRaw = m.productId?.trim().toUpperCase();
+                const fromLidRaw = m.fromLocationId?.trim().toUpperCase() || 'NONE';
+                const toLidRaw = m.toLocationId?.trim().toUpperCase() || 'NONE';
                 
-                const key = `${pid}|${m.quantity}|${m.type}|${fromLid}|${toLid}|${dayKey}`;
+                // Traducir a IDs canónicos si es posible
+                const pid = productMap.get(pidRaw) ? pidRaw : pidRaw;
+                const fromLid = locationMap.get(fromLidRaw) || (fromLidRaw === 'NONE' ? 'NONE' : fromLidRaw);
+                const toLid = locationMap.get(toLidRaw) || (toLidRaw === 'NONE' ? 'NONE' : toLidRaw);
+                
+                // Llave de identidad: Producto + Cantidad + Tipo + Origen + Destino + Timestamp EXACTO
+                const key = `${pid}|${m.quantity}|${m.type}|${fromLid}|${toLid}|${m.timestamp}`;
                 
                 if (!seenMovements.has(key)) {
                     uniqueMovements.push({
@@ -656,7 +673,9 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             const realStock: { productId: string, locationId: string, quantity: number }[] = [];
             
             for (const lid of uniqueLocationIds) {
+                const canonicalLid = locationMap.get(lid)!;
                 for (const pid of uniqueProductIds) {
+                    const canonicalPid = productMap.get(pid)!;
                     let calculated = 0;
                     uniqueMovements.forEach(m => {
                         if (m.productId !== pid) return;
@@ -669,16 +688,28 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
                     });
                     
                     if (calculated !== 0) {
-                        realStock.push({ productId: pid, locationId: lid, quantity: calculated });
+                        realStock.push({ 
+                            productId: canonicalPid, 
+                            locationId: canonicalLid, 
+                            quantity: calculated 
+                        });
                     }
                 }
             }
 
             // 4. Reset Físico (Nuclear): Borrar todo y escribir la verdad calculada
+            // FILTRO DE SEGURIDAD: Solo enviar si el ID existe en la tabla maestra (evita error 500 FK)
+            const productIdsInDb = new Set(products.map(p => p.id_venta));
+            const locationIdsInDb = new Set(locations.map(l => l.id));
+
+            const validStock = realStock.filter(s => 
+                productIdsInDb.has(s.productId) && locationIdsInDb.has(s.locationId)
+            );
+
             const response = await fetch('/api/bulk-import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ stock: realStock, clearStock: true })
+                body: JSON.stringify({ stock: validStock, clearStock: true })
             });
 
             if (response.ok) {
