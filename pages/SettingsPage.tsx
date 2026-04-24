@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.036",
+        title: "Integridad Atómica de Datos y Reportes",
+        date: "2026-04-24",
+        changes: [
+            "Blindaje de Base de Datos: Añadida restricción de unicidad física en stock para evitar duplicados en el servidor.",
+            "Normalización de Bodegas: Saneamiento automático de IDs y nombres para consolidar variantes de BODCENT.",
+            "Deduplicación en Reportes: Corrección en el generador de reportes que causaba cifras infladas al sumar registros redundantes.",
+            "Limpieza de Mayúsculas/Espacios: Mejora en la consistencia de búsqueda de productos y bodegas."
+        ]
+    },
+    {
         version: "1.3.035",
         title: "Corrección Matemática y Deduplicación (BODCENT)",
         date: "2026-04-24",

@@ -71,12 +71,29 @@ const ReportsPage: React.FC = () => {
         const isToday = new Date(snapshotDate).setHours(0,0,0,0) >= new Date().setHours(0,0,0,0);
 
         if (isToday) {
+            // Deduplicación preventiva antes de procesar:
+            // Aseguramos que solo tomamos un registro de stock por cada par (producto, ubicación)
+            const uniqueStockMap = new Map();
             stock.forEach(s => {
+                const key = `${s.productId.trim().toUpperCase()}|${s.locationId.trim().toUpperCase()}`;
+                if (!uniqueStockMap.has(key)) {
+                    uniqueStockMap.set(key, s);
+                } else {
+                    // Si existe duplicado en el estado de React, tomamos el que tenga mayor cantidad
+                    // (O podrías alertar, pero esto es más seguro para no inflar números accidentalmente)
+                    const existing = uniqueStockMap.get(key);
+                    if (Number(s.quantity) > Number(existing.quantity)) {
+                        uniqueStockMap.set(key, s);
+                    }
+                }
+            });
+
+            uniqueStockMap.forEach(s => {
                 const pid = s.productId.trim();
                 const lid = s.locationId.trim();
                 
                 if (selectedLocationId !== 'all') {
-                    const loc = locations.find(l => l.id.trim() === lid);
+                    const loc = locations.find(l => l.id.trim().toUpperCase() === lid.toUpperCase());
                     const currentLidUpper = lid.toUpperCase();
                     const currentLnameUpper = loc?.name ? loc.name.trim().toUpperCase() : '';
                     const selectedCanonical = selectedLocationId.trim().toUpperCase();
@@ -84,7 +101,6 @@ const ReportsPage: React.FC = () => {
                     if (currentLidUpper !== selectedCanonical && currentLnameUpper !== selectedCanonical) return;
                 }
 
-                // Normalización de llave para evitar duplicados por casing/espacios
                 const normalizedPid = pid.toUpperCase();
                 results[normalizedPid] = (results[normalizedPid] || 0) + Number(s.quantity);
             });
