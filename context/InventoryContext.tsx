@@ -266,53 +266,10 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
     }, [checkHealth]);
 
-    const repairStockData = useCallback(async () => {
-        try {
-            // Leemos el stock actual directamente de la API para asegurar frescura
-            const res = await fetch('/api/stock');
-            if (!res.ok) return false;
-            const currentStock: Stock[] = await res.json();
-            
-            const consolidated: Record<string, number> = {};
-            const finalStock: {productId: string; locationId: string; quantity: number}[] = [];
-
-            currentStock.forEach(s => {
-                const key = `${s.productId.trim().toUpperCase()}|${s.locationId.trim().toUpperCase()}`;
-                // Si ya existe la llave, es un duplicado. Sumamos para no perder historial, 
-                // pero luego el reporte usará esta versión limpia.
-                consolidated[key] = (consolidated[key] || 0) + Number(s.quantity);
-            });
-
-            if (Object.keys(consolidated).length < currentStock.length) {
-                console.log('[MAINTENANCE] Duplicados detectados. Iniciando saneamiento...');
-                for (const key in consolidated) {
-                    const [pid, lid] = key.split('|');
-                    finalStock.push({ productId: pid, locationId: lid, quantity: consolidated[key] });
-                }
-
-                // Sobreescribimos la tabla de stock con la versión unificada
-                await fetch('/api/bulk-import', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ stock: finalStock })
-                });
-
-                await fetchData();
-                return true;
-            }
-            return false;
-        } catch (err) {
-            console.error('Error reparando stock:', err);
-            return false;
-        }
-    }, [fetchData]);
-
     useEffect(() => {
         fetchData();
         fetchLogo();
-        // Intentar autolimpieza silenciosa en cargas
-        repairStockData();
-    }, [fetchData, fetchLogo, repairStockData]);
+    }, [fetchData, fetchLogo]);
 
     const addMovement = useCallback(async (movementData: Omit<Movement, 'id' | 'timestamp'>) => {
         const id = generateId('mov');
@@ -663,8 +620,9 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
      */
     const syncStockFromMovements = useCallback(async () => {
         try {
-            // 1. Filtrar movimientos duplicados antes de calcular
-            // Un movimiento se considera duplicado si tiene mismo producto, cantidad, tipo, ubicaciones y ocurre en la misma FECHA/HORA exacta
+            // 1. Filtrar movimientos duplicados de forma agresiva
+            // Un movimiento es duplicado si tiene mismo producto, cantidad, tipo y ubicaciones
+            // AND ocurre en el mismo día (evitamos problemas de segundos/milisegundos en importaciones)
             const uniqueMovements: any[] = [];
             const seen = new Set();
             
@@ -674,9 +632,12 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             );
 
             sortedMovements.forEach(m => {
-                const ts = new Date(m.timestamp).getTime();
-                // Llave de identidad: Producto + Cantidad + Tipo + Origen + Destino + Tiempo (segundo exacto)
-                const key = `${m.productId}|${m.quantity}|${m.type}|${m.fromLocationId}|${m.toLocationId}|${ts}`;
+                const d = new Date(m.timestamp);
+                const dayKey = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+                
+                // Llave de identidad de negocio: Producto + Cantidad + Tipo + Origen + Destino + Día
+                const key = `${m.productId.trim().toUpperCase()}|${m.quantity}|${m.type}|${m.fromLocationId?.trim().toUpperCase()}|${m.toLocationId?.trim().toUpperCase()}|${dayKey}`;
+                
                 if (!seen.has(key)) {
                     uniqueMovements.push(m);
                     seen.add(key);
@@ -686,20 +647,22 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             const realStock: { productId: string, locationId: string, quantity: number }[] = [];
             
             for (const loc of locations) {
+                const lid = loc.id.trim().toUpperCase();
                 for (const prod of products) {
+                    const pid = prod.id_venta.trim().toUpperCase();
                     let calculated = 0;
                     uniqueMovements.forEach(m => {
-                        if (m.productId !== prod.id_venta) return;
-                        if (m.toLocationId === loc.id) {
+                        if (m.productId.trim().toUpperCase() !== pid) return;
+                        if (m.toLocationId?.trim().toUpperCase() === lid) {
                             if (m.type !== MovementType.TRANSFER_OUT) calculated += Number(m.quantity);
                         }
-                        if (m.fromLocationId === loc.id) {
+                        if (m.fromLocationId?.trim().toUpperCase() === lid) {
                             if (m.type !== MovementType.TRANSFER_IN) calculated -= Number(m.quantity);
                         }
                     });
                     
                     if (calculated !== 0) {
-                        realStock.push({ productId: prod.id_venta, locationId: loc.id, quantity: calculated });
+                        realStock.push({ productId: pid, locationId: lid, quantity: calculated });
                     }
                 }
             }

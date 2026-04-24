@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.026",
+        title: "Deduplicación Agresiva y Estabilidad",
+        date: "2026-04-24",
+        changes: [
+            "Remoción de Auto-Repair: Se eliminó el sistema que sumaba duplicados al inicio, que era el causante del inflado de stock (2x).",
+            "Deduplicación por Día: La sincronización nuclear ahora ignora movimientos idénticos ocurridos el mismo día, ideal para limpiar importaciones fallidas.",
+            "Normalización de Identidad: Se reforzó el tratamiento de IDs para que 'ALMDOM' y 'almdom' sean siempre tratados como la misma entidad.",
+            "IMPORTANTE: Es necesario ejecutar 'Sincronizar Stock' una última vez para purgar el stock inflado por las versiones anteriores."
+        ]
+    },
+    {
         version: "1.3.025",
         title: "Deduplicación Lógica de Movimientos",
         date: "2026-04-23",
