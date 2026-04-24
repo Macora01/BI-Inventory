@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.035",
+        title: "Corrección Matemática y Deduplicación (BODCENT)",
+        date: "2026-04-24",
+        changes: [
+            "Deduplicación por Ventana Diaria: El sistema ahora detecta y omite cargas duplicadas accidentales del mismo día.",
+            "Consolidación de BODCENT: Solucionado el error que duplicaba el stock en la bodega principal.",
+            "Normalización de Integros: Los cálculos de Dashboard y Reportes ahora usan el mismo motor de deduplicación para consistencia total."
+        ]
+    },
+    {
         version: "1.3.034",
         title: "Gestión de Historial de Movimientos",
         date: "2026-04-24",

@@ -625,15 +625,44 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
      */
     const syncStockFromMovements = useCallback(async () => {
         try {
-            // 1. Catálogos estrictos para integridad de IDs
+            // 1. Catálogos estrictos
             const productIdsInDb = new Set(products.map(p => p.id_venta.trim().toUpperCase()));
             const locationIdsInDb = new Set(locations.map(l => l.id.trim().toUpperCase()));
 
             const realStockMap = new Map<string, number>();
 
-            // 2. Procesar TODO el historial de movimientos sin filtros de "ventana de tiempo"
-            // No intentamos adivinar duplicados por proximidad temporal. Si existe en la DB, cuenta.
-            movements.forEach(m => {
+            // 2. DEDUPLICACIÓN INTELIGENTE DE MOVIMIENTOS
+            // Si dos movimientos tienen los mismos datos básicos y ocurrieron en la misma ventana de tiempo,
+            // los tratamos como un solo suceso (evita el error de la IA duplicando cargas).
+            const uniqueMovements: any[] = [];
+            const seenKeys = new Set();
+
+            // Ordenamos para que la deduplicación sea consistente
+            const sortedMovements = [...movements].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+            sortedMovements.forEach(m => {
+                const pid = m.productId?.trim().toUpperCase();
+                const qty = Number(m.quantity) || 0;
+                const type = m.type;
+                const from = m.fromLocationId?.trim().toUpperCase() || 'NONE';
+                const to = m.toLocationId?.trim().toUpperCase() || 'NONE';
+                
+                // Llave de identidad: Si es el mismo producto, cantidad, tipo y ruta en la misma FECHA (día)
+                // lo consideramos un duplicado de carga accidental.
+                const date = new Date(m.timestamp);
+                const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+                const identityKey = `${pid}|${qty}|${type}|${from}|${to}|${dayKey}`;
+
+                if (!seenKeys.has(identityKey)) {
+                    uniqueMovements.push(m);
+                    seenKeys.add(identityKey);
+                }
+            });
+
+            console.log(`[SYNC] Movimientos antes: ${movements.length}, después de deduplicar: ${uniqueMovements.length}`);
+
+            // 3. Procesar movimientos deduplicados
+            uniqueMovements.forEach(m => {
                 const pid = m.productId?.trim().toUpperCase();
                 const fromLid = m.fromLocationId?.trim().toUpperCase();
                 const toLid = m.toLocationId?.trim().toUpperCase();
