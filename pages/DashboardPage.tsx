@@ -21,8 +21,8 @@ const DashboardPage: React.FC = () => {
         if (!Array.isArray(stock)) return [];
         const map = new Map<string, number>();
         stock.forEach(s => {
-            const pid = (s.productId || "").trim().toUpperCase();
-            const lid = (s.locationId || "").trim().toUpperCase();
+            const pid = (s.productId || "").toString().trim().toUpperCase();
+            const lid = (s.locationId || "").toString().trim().toUpperCase();
             if (!pid || !lid) return;
             const key = `${pid}|${lid}`;
             map.set(key, (map.get(key) || 0) + Number(s.quantity));

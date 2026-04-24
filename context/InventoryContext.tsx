@@ -621,20 +621,21 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
     const syncStockFromMovements = useCallback(async () => {
         try {
             // 1. Unificar Catálogos para evitar duplicados por ID/Nombre
-            // Guardamos el mapeo de UPCASE -> ORIGINAL para respetar la FK de base de datos
             const productMap = new Map<string, string>();
-            products.forEach(p => productMap.set(p.id_venta.trim().toUpperCase(), p.id_venta));
+            products.forEach(p => {
+                const pid = p.id_venta.trim().toUpperCase();
+                productMap.set(pid, p.id_venta);
+                if (p.description) productMap.set(p.description.trim().toUpperCase(), p.id_venta);
+            });
             
             const locationMap = new Map<string, string>();
             locations.forEach(l => {
-                locationMap.set(l.id.trim().toUpperCase(), l.id);
-                // CRÍTICO: También mapeamos el nombre, por si el movimiento trae el nombre como ID
-                if (l.name) {
-                    locationMap.set(l.name.trim().toUpperCase(), l.id);
-                }
+                const lid = l.id.trim().toUpperCase();
+                locationMap.set(lid, l.id);
+                if (l.name) locationMap.set(l.name.trim().toUpperCase(), l.id);
             });
 
-            const uniqueProductIds = Array.from(productMap.keys());
+            const uniqueProductIds = Array.from(new Set(products.map(p => p.id_venta.trim().toUpperCase())));
             const uniqueLocationIds = Array.from(new Set(locations.map(l => l.id.trim().toUpperCase())));
 
             // 2. Filtrar movimientos duplicados de forma agresiva (Mismo producto, cantidad, tipo, ubicaciones y día)
@@ -673,17 +674,20 @@ export const InventoryProvider: React.FC<{ children: ReactNode }> = ({ children 
             const realStock: { productId: string, locationId: string, quantity: number }[] = [];
             
             for (const lid of uniqueLocationIds) {
-                const canonicalLid = locationMap.get(lid)!;
+                const canonicalLid = locationMap.get(lid) || lid; // Fallback al ID original si no hay mapa
                 for (const pid of uniqueProductIds) {
-                    const canonicalPid = productMap.get(pid)!;
+                    const canonicalPid = productMap.get(pid) || pid; // Fallback al ID original si no hay mapa
                     let calculated = 0;
                     uniqueMovements.forEach(m => {
-                        if (m.productId !== pid) return;
-                        if (m.toLocationId === lid) {
-                            if (m.type !== MovementType.TRANSFER_OUT) calculated += Number(m.quantity);
-                        }
-                        if (m.fromLocationId === lid) {
-                            if (m.type !== MovementType.TRANSFER_IN) calculated -= Number(m.quantity);
+                        // Comparación flexible: intentamos match exacto normalizado o match por nombre
+                        const mPid = m.productId?.trim().toUpperCase();
+                        if (mPid === pid) {
+                            if (m.toLocationId?.trim().toUpperCase() === lid) {
+                                if (m.type !== MovementType.TRANSFER_OUT) calculated += Number(m.quantity);
+                            }
+                            if (m.fromLocationId?.trim().toUpperCase() === lid) {
+                                if (m.type !== MovementType.TRANSFER_IN) calculated -= Number(m.quantity);
+                            }
                         }
                     });
                     

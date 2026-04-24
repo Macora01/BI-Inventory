@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.029",
+        title: "Recuperación de Integridad de Datos",
+        date: "2026-04-24",
+        changes: [
+            "Fallo de Seguridad: Se corrigió el motor de sincronización que mostraba valores en cero por excesiva rigidez en los IDs.",
+            "Match por Descripción: El sistema ahora es capaz de recuperar stock incluso si los movimientos históricos usan descripciones en lugar de códigos.",
+            "Prevención de Error 500: Se añadieron salvaguardas para que la base de datos no rechace los ajustes de stock calculados."
+        ]
+    },
+    {
         version: "1.3.028",
         title: "Reparación del Motor de Sincronización",
         date: "2026-04-24",
