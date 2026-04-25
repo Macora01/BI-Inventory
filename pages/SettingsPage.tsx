@@ -10,6 +10,16 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.039",
+        title: "Resolución de Errores de Empaquetado (Build)",
+        date: "2026-04-25",
+        changes: [
+            "Corrección de Sintaxis: Eliminación de etiquetas JSX huérfanas que impedían la compilación de producción en Coolify.",
+            "Actualización de Iconografía: Se agregaron las importaciones faltantes de Lucide-React (Building2, MapPin, ClipboardList) en la nueva interfaz de Configuración.",
+            "Estabilidad de Despliegue: Verificación de linting exitosa para asegurar compatibilidad total con servidores externos."
+        ]
+    },
+    {
         version: "1.3.038",
         title: "Reparación de Infraestructura y UI",
         date: "2026-04-24",
