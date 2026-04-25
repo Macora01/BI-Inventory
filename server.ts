@@ -172,6 +172,7 @@ async function initDb() {
             // Garantizar que BODCENT exista
             const bodcentCheck = await client.query("SELECT id FROM locations WHERE id = 'BODCENT'");
             if (bodcentCheck.rows.length === 0) {
+                // Solo insertamos si no existe, sin borrar nada más
                 await client.query("INSERT INTO locations (id, name, type) VALUES ('BODCENT', 'BODCENT', 'FIXED_STORE_PERMANENT')");
             }
             // --- FIN SANEAMIENTO ---

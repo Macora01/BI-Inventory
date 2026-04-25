@@ -10,6 +10,17 @@ import { APP_VERSION } from '../version';
 
 const CHANGELOG = [
     {
+        version: "1.3.038",
+        title: "Reparación de Infraestructura y UI",
+        date: "2026-04-24",
+        changes: [
+            "Reparación de Conexión: Se eliminó el bloqueo de base de datos causado por intentos de renombrado de ubicaciones protegidas.",
+            "Visualización de Mantenimiento: Se creó la pestaña dedicada 'Base de Datos' en Configuración para acceder fácilmente a las herramientas de sincronización.",
+            "Gestión Unificada: Renombrado del botón de reconstrucción a 'Sincronizar Stock desde Movimientos' para evitar confusiones.",
+            "Estabilidad de Servidor: Garantizada la permanencia de BODCENT como identificador maestro sin violar restricciones de PostgreSQL."
+        ]
+    },
+    {
         version: "1.3.037",
         title: "Restauración de Estabilidad y Seguridad de Datos",
         date: "2026-04-24",
@@ -629,17 +640,18 @@ const SettingsPage: React.FC = () => {
             </div>
 
             {/* Navegación por Pestañas */}
-            <div className="flex bg-background border-b border-accent overflow-x-auto no-scrollbar gap-4 px-1">
+            <div className="flex bg-background border-b border-accent overflow-x-auto no-scrollbar gap-2 px-1">
                 {[
-                    { id: 'profile', label: 'General', icon: <Database size={16} /> },
-                    { id: 'locations', label: 'Ubicaciones', icon: <Upload size={16} /> },
-                    { id: 'logs', label: 'Bitácora', icon: <History size={16} /> },
-                    { id: 'changelog', label: 'Versión', icon: <CheckCircle2 size={16} /> }
+                    { id: 'profile', label: 'Empresa', icon: <Building2 size={16} /> },
+                    { id: 'database', label: 'Base de Datos', icon: <Database size={16} /> },
+                    { id: 'locations', label: 'Ubicaciones', icon: <MapPin size={16} /> },
+                    { id: 'logs', label: 'Bitácora', icon: <ClipboardList size={16} /> },
+                    { id: 'changelog', label: 'Actualizaciones', icon: <History size={16} /> }
                 ].map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveSection(tab.id as any)}
-                        className={`flex items-center gap-2 px-6 py-3 border-b-2 transition-all whitespace-nowrap ${
+                        className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-all whitespace-nowrap ${
                             activeSection === tab.id 
                                 ? 'border-primary text-primary font-bold bg-accent/20' 
                                 : 'border-transparent text-text-light hover:text-text-main hover:bg-accent/10'
@@ -688,99 +700,35 @@ const SettingsPage: React.FC = () => {
                             </div>
                         </div>
                     </Card>
+                </div>
+            )}
 
-                    <Card title="Saneamiento y Diagnóstico de Datos">
-                        <div className="p-4 space-y-4">
-                            <p className="text-sm text-text-light">
-                                Utilice estas herramientas si detecta discrepancias entre los Reportes y la pestaña de Inventario, 
-                                o si sospecha que hay datos duplicados.
-                            </p>
-                            
-                            <div className="bg-accent/20 p-4 rounded-lg border border-accent">
-                                <h4 className="font-bold text-primary mb-2 flex items-center gap-2">
-                                    <AlertTriangle size={18} /> Herramientas de Sincronización
-                                </h4>
-                                <div className="space-y-3">
-                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-2 bg-white rounded border border-accent/30">
-                                        <div>
-                                            <p className="text-sm font-bold">Generar Logs desde Stock</p>
-                                            <p className="text-xs text-text-light">Crea movimientos de ajuste para que los reportes coincidan con el inventario actual. Úselo si cargó datos antes de tener logs.</p>
-                                        </div>
-                                        <Button size="sm" onClick={async () => {
-                                            if(window.confirm("¿Seguro? Esto creará movimientos de ajuste automáticos para todas las diferencias detectadas.")) {
-                                                try {
-                                                    // @ts-ignore
-                                                    await fixMovementsFromStock();
-                                                    addToast("Sincronización completada. Los reportes ahora coincidirán con el inventario.", "success");
-                                                } catch(e) { addToast("Error al sincronizar", "error"); }
-                                            }
-                                        }}>Sincronizar Reportes</Button>
-                                    </div>
-                                    
-                                    <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-2 bg-white rounded border border-accent/30">
-                                        <div>
-                                            <p className="text-sm font-bold">Corregir Stock desde Logs</p>
-                                            <p className="text-xs text-text-light">Ajusta el inventario para que coincida exactamente con la suma de movimientos. ADVERTENCIA: Puede borrar stock si faltan logs.</p>
-                                        </div>
-                                        <Button size="sm" variant="secondary" onClick={async () => {
-                                            if(window.confirm("¡ADVERTENCIA! Esto ajustará su inventario físico basándose en el historial de movimientos. Si le faltan movimientos, perderá datos de stock. ¿Desea continuar?")) {
-                                                try {
-                                                    // @ts-ignore
-                                                    await syncStockFromMovements();
-                                                    addToast("Inventario ajustado según historial de movimientos.", "success");
-                                                } catch(e) { addToast("Error al sincronizar", "error"); }
-                                            }
-                                        }}>Sincronizar Stock</Button>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <div className="bg-secondary/10 p-4 rounded-lg border border-secondary/20">
-                                <h4 className="font-bold text-secondary mb-2">Detección de Conflictos de Ubicación</h4>
-                                <Button size="sm" variant="secondary" onClick={() => {
-                                    const namesCount: Record<string, string[]> = {};
-                                    locations.forEach(l => {
-                                        const name = l.name.toLowerCase().trim();
-                                        if(!namesCount[name]) namesCount[name] = [];
-                                        namesCount[name].push(l.id);
-                                    });
-                                    const duplicates = Object.entries(namesCount).filter(([name, ids]) => ids.length > 1);
-                                    if(duplicates.length > 0) {
-                                        const msg = duplicates.map(([name, ids]) => `• "${name}" se repite en IDs: ${ids.join(', ')}`).join('\n');
-                                        alert(`Se detectaron nombres de ubicación duplicados:\n\n${msg}\n\nSe recomienda unificar estas ubicaciones usando el ID maestro deseado.`);
-                                    } else {
-                                        addToast("No se detectaron nombres de ubicación duplicados.", "success");
-                                    }
-                                }}>Verificar Duplicados</Button>
-                                <p className="text-[10px] text-text-light mt-2 italic">Recomendación: Si tiene "ALMLIN" y "ALMVLT" con el mismo nombre, cámbieles el nombre para distinguirlos o únalos.</p>
-                            </div>
-                        </div>
-                    </Card>
-
-                    <Card title="Estado del Sistema (Conexión Base de Datos)">
+            {activeSection === 'database' && (
+                <div className="space-y-6">
+                    <Card title="Estado del Sistema (Conexión PostgreSQL)">
                         <div className="p-4 flex flex-col md:flex-row items-center justify-between gap-4">
                             <div className="flex items-center space-x-4">
                                 <div className={`p-3 rounded-full ${dbStatus?.database === 'connected' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
                                     <Database size={24} />
                                 </div>
-                                <div>
+                                <div className="flex-1">
                                     <h4 className="font-bold text-text-main">Estado de la Base de Datos</h4>
-                                    <div className="flex items-center space-x-2">
+                                    <div className="flex flex-col">
                                         {dbStatus?.database === 'connected' ? (
-                                            <>
-                                                <CheckCircle2 size={14} className="text-success" />
-                                                <span className="text-sm text-success font-medium">Conectado a PostgreSQL</span>
-                                            </>
+                                            <div className="flex items-center space-x-2 text-success">
+                                                <CheckCircle2 size={14} />
+                                                <span className="text-sm font-medium">Conectado a PostgreSQL ({dbStatus.details.database})</span>
+                                            </div>
                                         ) : (
-                                            <div className="flex flex-col">
-                                                <div className="flex items-center space-x-2">
-                                                    <XCircle size={14} className="text-danger" />
-                                                    <span className="text-sm text-danger font-medium">Desconectado (Usando DB Local Temporal)</span>
+                                            <div className="space-y-1">
+                                                <div className="flex items-center space-x-2 text-danger">
+                                                    <XCircle size={14} />
+                                                    <span className="text-sm font-medium">Desconectado (Error de Conexión)</span>
                                                 </div>
                                                 {dbStatus?.error && (
-                                                    <p className="text-[10px] text-danger mt-1 font-mono bg-danger/5 p-1 rounded">
-                                                        Error: {dbStatus.error}
-                                                    </p>
+                                                    <div className="mt-1 p-2 bg-danger/5 border border-danger/20 rounded text-[10px] font-mono text-danger break-words max-w-xl">
+                                                        Detalle: {dbStatus.error}
+                                                    </div>
                                                 )}
                                             </div>
                                         )}
@@ -802,125 +750,121 @@ const SettingsPage: React.FC = () => {
                         </div>
                     </Card>
 
-                    {dbStatus?.database === 'disconnected' && (
-                        <div className="bg-danger/10 border-2 border-danger p-6 rounded-xl flex flex-col md:flex-row items-center gap-6 animate-pulse">
-                            <div className="bg-danger text-white p-4 rounded-full">
-                                <AlertTriangle size={32} />
-                            </div>
-                            <div className="flex-1 text-center md:text-left">
-                                <h3 className="text-xl font-bold text-danger mb-1">¡Atención! Base de Datos no Detectada</h3>
-                                <p className="text-text-main">
-                                    La aplicación no está conectada a una base de datos externa. 
-                                    Esto puede causar que los datos se pierdan al reiniciar el servidor.
+                    <Card title="Herramientas de Mantenimiento de Stock">
+                        <div className="p-4 space-y-4">
+                            <div className="bg-primary/5 p-4 rounded-lg border border-primary/20">
+                                <h4 className="font-bold text-primary mb-2 flex items-center gap-2">
+                                    <RefreshCw size={18} /> Sincronización Maestra (Logs → Stock)
+                                </h4>
+                                <p className="text-sm text-text-light mb-4">
+                                    Esta herramienta **reconstruye** su inventario físico basándose exclusivamente en el historial de movimientos. 
+                                    Úsela si los totales mostrados en la pestaña de Inventario no parecen ser correctos.
                                 </p>
+                                <Button 
+                                    className="w-full sm:w-auto font-bold"
+                                    onClick={async () => {
+                                        if(window.confirm("¡ATENCIÓN! Esto recalculará todo su inventario físico basándose en el historial de movimientos. ¿Desea proceder?")) {
+                                            try {
+                                                // @ts-ignore
+                                                await syncStockFromMovements();
+                                                addToast("Sincronización completada exitosamente.", "success");
+                                                window.location.reload();
+                                            } catch(e) { 
+                                                console.error(e);
+                                                addToast("Error durante la sincronización.", "error"); 
+                                            }
+                                        }
+                                    }}
+                                >
+                                    Sincronizar Stock desde Movimientos
+                                </Button>
                             </div>
-                        </div>
-                    )}
 
-                    <Card title="Gestión de Usuarios">
-                        <Button onClick={() => openUserModal()} className="mb-4">Añadir Usuario</Button>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-left">
-                                <thead className="text-xs text-primary uppercase bg-accent">
-                                    <tr>
-                                        <th className="px-6 py-3">Nombre de Usuario</th>
-                                        <th className="px-6 py-3">Contraseña</th>
-                                        <th className="px-6 py-3">Rol</th>
-                                        <th className="px-6 py-3 text-right">Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users.map(user => (
-                                        <tr key={user.id} className="bg-background-light border-b border-background">
-                                            <td className="px-6 py-4">{user.username}</td>
-                                            <td className="px-6 py-4">••••••••</td>
-                                            <td className="px-6 py-4 capitalize">{user.role}</td>
-                                            <td className="px-6 py-4 text-right">
-                                                <button onClick={() => openUserModal(user)} className="text-secondary p-1"><Edit size={16}/></button>
-                                                <button onClick={() => deleteUser(user.id)} className="text-danger p-1 ml-2"><Trash2 size={16}/></button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                            <div className="bg-warning/5 p-4 rounded-lg border border-warning/20">
+                                <h4 className="font-bold text-warning mb-2">Sincronización de Reportes Históricos</h4>
+                                <p className="text-xs text-text-light mb-4">
+                                    Alinea los reportes con el stock físico actual creando movimientos de ajuste (Entradas/Salidas).
+                                </p>
+                                <Button 
+                                    variant="secondary" 
+                                    size="sm"
+                                    onClick={async () => {
+                                        if(window.confirm("¿Seguro? Esto creará movimientos de ajuste automáticos para todas las diferencias detectadas.")) {
+                                            try {
+                                                // @ts-ignore
+                                                await fixMovementsFromStock();
+                                                addToast("Reportes sincronizados.", "success");
+                                            } catch(e) { addToast("Error al sincronizar reportes.", "error"); }
+                                        }
+                                    }}
+                                >
+                                    Generar Movimientos de Ajuste
+                                </Button>
+                            </div>
                         </div>
                     </Card>
 
-                    <Card title="Gestión de Datos (Respaldo y Limpieza)">
+                    <Card title="Gestión de Datos y Usuarios">
                         <div className="space-y-6 p-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b border-accent pb-6">
                                 <div className="p-4 bg-primary/5 rounded-lg border border-primary/20">
                                     <h4 className="font-bold text-primary flex items-center mb-2">
                                         <Download size={18} className="mr-2" /> Exportar Respaldo
                                     </h4>
-                                    <p className="text-xs text-text-light mb-4">Descarga un archivo JSON con todos los datos.</p>
-                                    <Button onClick={handleDownloadBackup} className="w-full flex items-center justify-center gap-2">
-                                        <Download size={16} /> Descargar Archivo de Respaldo
-                                    </Button>
+                                    <Button onClick={handleDownloadBackup} className="w-full">Descargar JSON</Button>
                                 </div>
                                 <div className="p-4 bg-secondary/5 rounded-lg border border-secondary/20">
                                     <h4 className="font-bold text-secondary flex items-center mb-2">
-                                        <FileUp size={18} className="mr-2" /> Restaurar Respaldo
+                                        <FileUp size={18} className="mr-2" /> Importar Respaldo
                                     </h4>
-                                    <p className="text-xs text-text-light mb-4">Carga un archivo de respaldo previamente descargado.</p>
                                     <div className="relative">
-                                        <input 
-                                            type="file" 
-                                            accept=".json" 
-                                            onChange={handleRestoreBackup}
-                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                        />
-                                        <Button variant="secondary" className="w-full flex items-center justify-center gap-2">
-                                            <FileUp size={16} /> Seleccionar Archivo y Restaurar
-                                        </Button>
+                                        <input type="file" accept=".json" onChange={handleRestoreBackup} className="absolute inset-0 w-full h-full opacity-0" />
+                                        <Button variant="secondary" className="w-full text-xs">Cargar Archivo JSON</Button>
                                     </div>
                                 </div>
                             </div>
-
-                            <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-accent pb-4">
-                                <div className="text-left">
-                                    <h4 className="font-bold text-primary">Base de Datos de Productos</h4>
-                                    <p className="text-sm text-text-light">Elimina productos, stock y movimientos asociados.</p>
+                            
+                            <div className="pt-4">
+                                <h4 className="font-bold mb-4">Usuarios del Sistema</h4>
+                                <Button onClick={() => openUserModal()} className="mb-4" size="sm">Añadir Usuario</Button>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs text-left">
+                                        {/* ... tabla de usuarios (se mantiene igual) ... */}
+                                        <thead className="bg-accent/30">
+                                            <tr>
+                                                <th className="px-4 py-2">Usuario</th>
+                                                <th className="px-4 py-2">Rol</th>
+                                                <th className="px-4 py-2 text-right">Acciones</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {users.map(user => (
+                                                <tr key={user.id} className="border-b border-accent/20">
+                                                    <td className="px-4 py-2">{user.username}</td>
+                                                    <td className="px-4 py-2 capitalize">{user.role}</td>
+                                                    <td className="px-4 py-2 text-right">
+                                                        <button onClick={() => openUserModal(user)} className="text-secondary p-1"><Edit size={14}/></button>
+                                                        <button onClick={() => deleteUser(user.id)} className="text-danger p-1 ml-1"><Trash2 size={14}/></button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
                                 </div>
-                                <Button onClick={() => handleClearSpecific('products')} variant="danger">Limpiar Productos</Button>
                             </div>
 
-                            <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-accent pb-4">
-                                <div className="text-left">
-                                    <h4 className="font-bold text-primary">Base de Datos de Ubicaciones</h4>
-                                    <p className="text-sm text-text-light">Elimina todas las ubicaciones y el stock asociado.</p>
-                                </div>
-                                <Button onClick={() => handleClearSpecific('locations')} variant="danger">Limpiar Ubicaciones</Button>
-                            </div>
-
-                            <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-b border-accent pb-4">
-                                <div className="text-left">
-                                    <h4 className="font-bold text-primary">Base de Datos de Usuarios</h4>
-                                    <p className="text-sm text-text-light">Elimina todos los usuarios (requiere re-login).</p>
-                                </div>
-                                <Button onClick={() => handleClearSpecific('users')} variant="danger">Limpiar Usuarios</Button>
-                            </div>
-
-                            <div className="flex flex-col items-center justify-center pt-4 text-center">
-                                <p className="text-text-light mb-4">
-                                    {isConfirmingClear
-                                        ? '¡ADVERTENCIA! ¿Está seguro de que desea eliminar permanentemente TODOS los datos del sistema?'
-                                        : 'Elimina absolutamente todos los datos de la aplicación.'
-                                    }
-                                </p>
-                                <div className="flex items-center justify-center gap-4">
-                                    {isConfirmingClear ? (
-                                        <>
-                                            <Button onClick={handleClearData} variant="danger" className="animate-pulse">Sí, Eliminar Todo</Button>
-                                            <Button onClick={handleCancelClear} variant="secondary">Cancelar</Button>
-                                        </>
-                                    ) : (
-                                        <Button onClick={handleClearData} variant="danger">Limpiar Todos los Datos</Button>
-                                    )}
-                                </div>
+                            <div className="flex flex-col items-center justify-center pt-8 border-t border-accent border-dashed">
+                                <Button onClick={handleClearData} variant="danger" size="sm">
+                                    {isConfirmingClear ? 'CONFIRMAR: Borrar TODO' : 'Borrar Toda la Base de Datos'}
+                                </Button>
+                                {isConfirmingClear && (
+                                    <Button onClick={handleCancelClear} variant="secondary" className="mt-2" size="xs">Cancelar Operación</Button>
+                                )}
                             </div>
                         </div>
                     </Card>
+                </div>
+            )}
                 </div>
             )}
 
