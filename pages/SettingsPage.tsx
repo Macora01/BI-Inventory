@@ -4,7 +4,7 @@ import Button from '../components/Button';
 import { useInventory } from '../context/InventoryContext';
 import { Location, User, LocationType, LOCATION_TYPE_MAP } from '../types';
 import Modal from '../components/Modal';
-import { Edit, Trash2, Database, CheckCircle2, XCircle, RefreshCw, AlertTriangle, Upload, Download, FileUp, RotateCcw, History } from 'lucide-react';
+import { Edit, Trash2, Database, CheckCircle2, XCircle, RefreshCw, AlertTriangle, Upload, Download, FileUp, RotateCcw, History, Building2, MapPin, ClipboardList } from 'lucide-react';
 import { useToast } from '../hooks/useToast';
 import { APP_VERSION } from '../version';
 
@@ -863,8 +863,6 @@ const SettingsPage: React.FC = () => {
                             </div>
                         </div>
                     </Card>
-                </div>
-            )}
                 </div>
             )}
 
